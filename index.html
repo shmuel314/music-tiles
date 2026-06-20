@@ -98,6 +98,17 @@
       </div>
 
       <div class="card">
+        <h3>ייבוא תמונות מיוטיוב</h3>
+        <p class="small muted">לחיפוש לפי שם שיר נדרש מפתח YouTube Data API (חינמי). התמונה נשמרת במכשיר בלבד — ללא ניגון מיוטיוב.</p>
+        <p class="small muted">יצירת מפתח: Google Cloud Console → YouTube Data API v3 → Credentials.</p>
+        <label class="field">
+          <span>מפתח YouTube API</span>
+          <input id="youtube-api-key" type="password" dir="ltr" autocomplete="off" placeholder="AIza..." />
+        </label>
+        <button id="youtube-api-save" class="btn btn-primary" type="button">שמירת מפתח</button>
+      </div>
+
+      <div class="card">
         <h3>אבטחה</h3>
         <div class="btn-group">
           <button id="change-pin" class="btn">שינוי קוד</button>
@@ -129,18 +140,20 @@
         <input id="song-image" type="file" accept="image/*" hidden />
       </div>
 
+      <label class="field">
+        <span>שם השיר</span>
+        <input id="song-title" type="text" placeholder="למשל: גלגלי האוטובוס" />
+        <p class="small muted">נדרש לייבוא תמונה מיוטיוב לפי שם השיר.</p>
+      </label>
+
       <div class="field youtube-field">
-        <span>קישור YouTube לתמונה</span>
-        <p class="small muted">רק לייבוא תמונת אריח — לא לניגון. התמונה נשמרת במכשיר ועובדת ללא אינטרנט.</p>
-        <input id="youtube-url" type="url" class="youtube-url" inputmode="url" autocomplete="off" placeholder="https://www.youtube.com/watch?v=..." dir="ltr" />
         <button type="button" id="youtube-import" class="btn">ייבוא תמונה מיוטיוב</button>
-        <div id="youtube-preview-actions" class="youtube-preview-actions" hidden>
-          <p class="small">התמונה מוצגת למעלה. לאשר?</p>
-          <div class="modal-actions">
-            <button type="button" id="youtube-accept" class="btn btn-primary">אישור התמונה</button>
-            <button type="button" id="youtube-cancel" class="btn">ביטול</button>
-          </div>
+        <div id="youtube-status" class="youtube-status" hidden role="status" aria-live="polite">
+          <span id="youtube-spinner" class="youtube-spinner" hidden aria-hidden="true"></span>
+          <span id="youtube-status-text"></span>
         </div>
+        <button type="button" id="youtube-cancel" class="btn" hidden>ביטול תמונה</button>
+        <p class="small muted">מחפש ביוטיוב לפי שם השיר, מוריד תמונה למכשיר. עובד ללא אינטרנט לאחר השמירה.</p>
       </div>
 
       <div class="field">
@@ -149,11 +162,6 @@
         <span id="audio-name" class="small muted">לא נבחר קובץ</span>
         <input id="song-audio" type="file" accept="audio/*" hidden />
       </div>
-
-      <label class="field">
-        <span>שם (לא חובה, להורים בלבד)</span>
-        <input id="song-title" type="text" placeholder="למשל: גלגלי האוטובוס" />
-      </label>
 
       <label class="field">
         <span>רשימת השמעה</span>

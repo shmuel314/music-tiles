@@ -49,6 +49,8 @@
     bulkAudio: $('bulk-audio'),
     songList: $('song-list'),
     changePin: $('change-pin'),
+    youtubeApiKey: $('youtube-api-key'),
+    youtubeApiSave: $('youtube-api-save'),
     exportFull: $('export-full'),
     exportMeta: $('export-meta'),
     importData: $('import-data'),
@@ -69,10 +71,10 @@
     songPlaylist: $('song-playlist'),
     songCancel: $('song-cancel'),
     songSave: $('song-save'),
-    youtubeUrl: $('youtube-url'),
     youtubeImport: $('youtube-import'),
-    youtubePreviewActions: $('youtube-preview-actions'),
-    youtubeAccept: $('youtube-accept'),
+    youtubeStatus: $('youtube-status'),
+    youtubeSpinner: $('youtube-spinner'),
+    youtubeStatusText: $('youtube-status-text'),
     youtubeCancel: $('youtube-cancel'),
     toast: $('toast')
   };
@@ -394,6 +396,8 @@
     el.volumeCap.value = Math.round(state.volumeCap * 100);
     el.volumeCapLabel.textContent = el.volumeCap.value + '%';
 
+    el.youtubeApiKey.value = await DB.getSetting('youtubeApiKey', '') || '';
+
     renderPlaylistList();
     renderSongList();
   }
@@ -516,6 +520,12 @@
     await renderSongList();
   }
 
+  async function saveYoutubeApiKey() {
+    const key = el.youtubeApiKey.value.trim();
+    await DB.setSetting('youtubeApiKey', key);
+    toast(key ? 'מפתח YouTube נשמר' : 'מפתח YouTube נמחק');
+  }
+
   // ---- Song add/edit modal ----
   const draft = {
     id: null,
@@ -523,7 +533,6 @@
     audioBlob: null,
     keepImage: false,
     keepAudio: false,
-    pendingYtBlob: null,
     imagePreviewRevert: null
   };
 
@@ -535,17 +544,84 @@
     { name: 'default', minWidth: 120 }
   ];
 
-  function extractYouTubeVideoId(url) {
-    const s = (url || '').trim();
-    if (!s) return null;
-    let m = s.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
-    if (m) return m[1];
-    m = s.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
-    if (m) return m[1];
-    m = s.match(/\/(?:embed|shorts|live|v)\/([a-zA-Z0-9_-]{11})/);
-    if (m) return m[1];
-    if (/^[a-zA-Z0-9_-]{11}$/.test(s)) return s;
-    return null;
+  function normalizeSearchText(text) {
+    return (text || '').toLowerCase().replace(/[^\w\s\u0590-\u05ff]/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  function pickBestYouTubeResult(query, items) {
+    const q = normalizeSearchText(query);
+    const qWords = q.split(' ').filter(Boolean);
+    let bestId = items[0]?.id?.videoId || null;
+    let bestScore = -1;
+
+    for (const item of items) {
+      const title = normalizeSearchText(item.snippet?.title || '');
+      let score = 0;
+      if (title === q) score = 100;
+      else if (title.includes(q) || q.includes(title)) score = 85;
+      else if (qWords.length) {
+        score = (qWords.filter((w) => title.includes(w)).length / qWords.length) * 70;
+      }
+      if (score > bestScore && item.id?.videoId) {
+        bestScore = score;
+        bestId = item.id.videoId;
+      }
+    }
+    return bestId;
+  }
+
+  async function searchYouTubeVideoId(query, apiKey) {
+    const url = new URL('https://www.googleapis.com/youtube/v3/search');
+    url.searchParams.set('part', 'snippet');
+    url.searchParams.set('q', query);
+    url.searchParams.set('type', 'video');
+    url.searchParams.set('maxResults', '5');
+    url.searchParams.set('safeSearch', 'strict');
+    url.searchParams.set('key', apiKey);
+
+    let res;
+    try {
+      res = await fetch(url.toString());
+    } catch {
+      throw new Error('offline');
+    }
+
+    if (!res.ok) {
+      if (res.status === 403 || res.status === 401) throw new Error('api_key');
+      throw new Error('api');
+    }
+
+    const data = await res.json();
+    if (!Array.isArray(data.items) || data.items.length === 0) throw new Error('no_results');
+    const videoId = pickBestYouTubeResult(query, data.items);
+    if (!videoId) throw new Error('no_results');
+    return videoId;
+  }
+
+  function youtubeImportErrorMessage(err) {
+    switch (err && err.message) {
+      case 'no_title': return 'יש להזין שם שיר לפני ייבוא תמונה';
+      case 'no_api_key': return 'יש להגדיר מפתח YouTube API באזור ההורים';
+      case 'offline': return 'אין חיבור לאינטרנט';
+      case 'no_results': return 'לא נמצאה תמונה מתאימה ביוטיוב';
+      case 'api_key': return 'שגיאה במפתח YouTube API — בדקו באזור ההורים';
+      case 'api': return 'שגיאה בחיפוש YouTube — נסו שוב';
+      case 'thumbnail': return 'לא הצלחנו לייבא את התמונה. נסו שוב';
+      default: return 'לא הצלחנו לייבא את התמונה. נסו שוב';
+    }
+  }
+
+  function setYoutubeImportLoading(loading, text) {
+    el.youtubeImport.disabled = loading;
+    if (!text) {
+      el.youtubeStatus.hidden = true;
+      el.youtubeSpinner.hidden = true;
+      el.youtubeStatusText.textContent = '';
+      return;
+    }
+    el.youtubeStatus.hidden = false;
+    el.youtubeStatusText.textContent = text;
+    el.youtubeSpinner.hidden = !loading;
   }
 
   function readImageDimensionsFromBlob(blob) {
@@ -642,9 +718,8 @@
     el.imgPreview.textContent = '';
   }
 
-  function hideYoutubePreviewActions() {
-    el.youtubePreviewActions.hidden = true;
-    draft.pendingYtBlob = null;
+  function hideYoutubeRevert() {
+    el.youtubeCancel.hidden = true;
     draft.imagePreviewRevert = null;
   }
 
@@ -654,13 +729,13 @@
     draft.audioBlob = null;
     draft.keepImage = !!(song && song.image);
     draft.keepAudio = !!(song && song.audio);
-    hideYoutubePreviewActions();
+    hideYoutubeRevert();
+    setYoutubeImportLoading(false, '');
 
     el.songModalTitle.textContent = song ? 'עריכת שיר' : 'הוספת שיר';
     el.songTitle.value = song ? (song.title || '') : '';
     el.songPlaylist.value = song ? song.playlistId : el.activePlaylistSelect.value;
     el.audioName.textContent = draft.keepAudio ? 'הקובץ הקיים נשמר' : 'לא נבחר קובץ';
-    el.youtubeUrl.value = '';
     el.youtubeImport.disabled = false;
     if (song && song.image) {
       setImagePreviewBlob(song.image);
@@ -672,49 +747,60 @@
 
   function onImagePicked(file) {
     if (!file) return;
-    hideYoutubePreviewActions();
+    hideYoutubeRevert();
     draft.imageBlob = file;
     draft.keepImage = false;
     setImagePreviewBlob(file);
   }
 
   async function importYoutubeThumbnail() {
-    const videoId = extractYouTubeVideoId(el.youtubeUrl.value);
-    if (!videoId) {
-      toast('קישור YouTube לא תקין');
+    const title = el.songTitle.value.trim();
+    if (!title) {
+      toast('יש להזין שם שיר לפני ייבוא תמונה');
+      return;
+    }
+
+    const apiKey = (await DB.getSetting('youtubeApiKey', '')) || '';
+    if (!apiKey) {
+      toast('יש להגדיר מפתח YouTube API באזור ההורים');
+      return;
+    }
+
+    if (!navigator.onLine) {
+      toast('אין חיבור לאינטרנט');
       return;
     }
 
     draft.imagePreviewRevert = snapshotImagePreview();
-    el.youtubeImport.disabled = true;
-    toast('מייבא תמונה...');
+    const revertDraft = { imageBlob: draft.imageBlob, keepImage: draft.keepImage };
+    setYoutubeImportLoading(true, 'מחפש תמונה ביוטיוב...');
 
     try {
-      const { blob, quality } = await fetchYouTubeThumbnailBlob(videoId);
-      draft.pendingYtBlob = blob;
+      const videoId = await searchYouTubeVideoId(title, apiKey);
+      setYoutubeImportLoading(true, 'מייבא תמונה...');
+      const { blob } = await fetchYouTubeThumbnailBlob(videoId);
+      draft.imageBlob = blob;
+      draft.keepImage = false;
       setImagePreviewBlob(blob);
-      el.youtubePreviewActions.hidden = false;
-      toast(`תמונה נטענה (${quality}) — לאשר?`);
-    } catch {
-      draft.pendingYtBlob = null;
+      el.youtubeCancel.hidden = false;
+      setYoutubeImportLoading(false, '');
+      toast('התמונה יובאה בהצלחה — לחצו «שמירה» לשמירה');
+    } catch (err) {
       if (draft.imagePreviewRevert) applyImagePreview(draft.imagePreviewRevert);
-      toast('לא ניתן לייבא תמונה מיוטיוב');
-    } finally {
-      el.youtubeImport.disabled = false;
+      draft.imageBlob = revertDraft.imageBlob;
+      draft.keepImage = revertDraft.keepImage;
+      hideYoutubeRevert();
+      setYoutubeImportLoading(false, '');
+      toast(youtubeImportErrorMessage(err));
     }
-  }
-
-  function acceptYoutubeThumbnail() {
-    if (!draft.pendingYtBlob) return;
-    draft.imageBlob = draft.pendingYtBlob;
-    draft.keepImage = false;
-    hideYoutubePreviewActions();
-    toast('התמונה אושרה — לחצו «שמירה» לשמירה');
   }
 
   function cancelYoutubeThumbnail() {
     if (draft.imagePreviewRevert) applyImagePreview(draft.imagePreviewRevert);
-    hideYoutubePreviewActions();
+    draft.imageBlob = null;
+    draft.keepImage = !!draft.imagePreviewRevert?.backgroundImage;
+    hideYoutubeRevert();
+    toast('התמונה בוטלה');
   }
   function onAudioPicked(file) {
     if (!file) return;
@@ -830,7 +916,8 @@
       settings: {
         activePlaylistId: await DB.getSetting('activePlaylistId', null),
         volumeCap: state.volumeCap,
-        offlineMode: await DB.getSetting('offlineMode', true)
+        offlineMode: await DB.getSetting('offlineMode', true),
+        youtubeApiKey: await DB.getSetting('youtubeApiKey', '')
       },
       playlists,
       songs
@@ -904,6 +991,7 @@
         await DB.setSetting('volumeCap', data.settings.volumeCap);
       }
       if (typeof data.settings.offlineMode === 'boolean') await DB.setSetting('offlineMode', data.settings.offlineMode);
+      if (typeof data.settings.youtubeApiKey === 'string') await DB.setSetting('youtubeApiKey', data.settings.youtubeApiKey);
     }
   }
 
@@ -1092,6 +1180,7 @@
       e.target.value = '';
     });
     el.changePin.addEventListener('click', openChangePin);
+    el.youtubeApiSave.addEventListener('click', saveYoutubeApiKey);
     el.exportFull.addEventListener('click', () => exportData(true));
     el.exportMeta.addEventListener('click', () => exportData(false));
     el.importData.addEventListener('click', () => el.importFile.click());
@@ -1108,7 +1197,6 @@
     el.songCancel.addEventListener('click', () => (el.songModal.hidden = true));
     el.songSave.addEventListener('click', saveSongDraft);
     el.youtubeImport.addEventListener('click', importYoutubeThumbnail);
-    el.youtubeAccept.addEventListener('click', acceptYoutubeThumbnail);
     el.youtubeCancel.addEventListener('click', cancelYoutubeThumbnail);
 
     // Keep audio playing within the cap if volume is changed programmatically
