@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#FAF4E1" />
+  <meta name="theme-color" content="#F7F3ED" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="מוזיקה" />
@@ -23,7 +23,7 @@
       <div id="tiles" class="tiles"></div>
     </div>
     <div id="empty-hint" class="empty-hint" hidden>
-      <p>אין שירים עדיין.</p>
+      <p id="empty-hint-main">אין שירים עדיין.</p>
       <p id="empty-hint-admin" class="small">לחצו על «אזור הורים» למעלה כדי להוסיף שירים.</p>
     </div>
 
@@ -68,6 +68,11 @@
           <input id="show-admin-button" type="checkbox" />
         </label>
         <p class="small muted">כבוי: גישה נסתרת בלחיצה ארוכה (5 שניות) על הפינה השמאלית העליונה.</p>
+        <label class="toggle-row">
+          <span>הצגת כפתור ניגון/השהיה במסך הילד</span>
+          <input id="show-playpause-button" type="checkbox" checked />
+        </label>
+        <p class="small muted">כבוי: הילד מפעיל שירים בלבד בלחיצה על אריח. ניגון והחלפת שירים נשארים פעילים.</p>
       </div>
 
       <div class="card">
@@ -179,6 +184,22 @@
       <div class="modal-actions">
         <button id="song-cancel" class="btn">ביטול</button>
         <button id="song-save" class="btn btn-primary">שמירה</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- COPY SONG MODAL -->
+  <section id="copy-song-modal" class="overlay modal" hidden>
+    <div class="modal-box">
+      <h2>העתקה לרשימה אחרת</h2>
+      <p id="copy-song-name" class="small muted"></p>
+      <label class="field">
+        <span>רשימת יעד</span>
+        <select id="copy-song-target"></select>
+      </label>
+      <div class="modal-actions">
+        <button id="copy-song-cancel" class="btn" type="button">ביטול</button>
+        <button id="copy-song-confirm" class="btn btn-primary" type="button">העתקה</button>
       </div>
     </div>
   </section>
