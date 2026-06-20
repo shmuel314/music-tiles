@@ -90,21 +90,6 @@ body { touch-action: manipulation; }
   padding: calc(10px + var(--safe-top)) var(--tile-pad) 0;
 }
 
-.admin-entry-btn {
-  background: var(--surface);
-  color: var(--brand-deep);
-  border: 2px solid var(--brand-deep);
-  border-radius: 999px;
-  padding: 7px 14px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  line-height: 1.2;
-}
-.admin-entry-btn:active {
-  background: var(--surface-lavender);
-}
-
 #admin-trigger {
   position: fixed;
   top: 0;
@@ -522,6 +507,15 @@ body { touch-action: manipulation; }
   background: var(--cta-coral-strong);
   border-color: var(--cta-coral-strong);
 }
+.btn-primary-brand {
+  background: var(--brand-deep);
+  color: var(--surface-white);
+  border-color: var(--brand-deep);
+}
+.btn-primary-brand:active:not(:disabled):not(.is-loading) {
+  background: var(--primary-strong);
+  border-color: var(--primary-strong);
+}
 .btn:disabled,
 .btn.is-loading {
   cursor: not-allowed;
@@ -544,6 +538,12 @@ body { touch-action: manipulation; }
   background: var(--cta-coral);
   color: var(--on-accent);
   border-color: var(--cta-coral);
+  opacity: 0.88;
+}
+.btn-primary-brand.is-loading {
+  background: var(--brand-deep);
+  color: var(--surface-white);
+  border-color: var(--brand-deep);
   opacity: 0.88;
 }
 .btn-danger {

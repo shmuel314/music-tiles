@@ -1,12 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Palette: ivory #FFFBEF, purple #35155D, white #FFFFFF, lavender #F4F0FF, lavender accent #C8B6FF, coral #FF8A65, peach #FED2B5, rose #F48A94 -->
   <rect width="512" height="512" rx="112" fill="#FFFBEF"/>
-  <rect x="96" y="96" width="320" height="320" rx="64" fill="#35155D"/>
-  <rect x="112" y="112" width="288" height="288" rx="52" fill="#FFFFFF"/>
-  <g transform="translate(256 268)">
-    <ellipse cx="0" cy="34" rx="52" ry="44" fill="#FF8A65" transform="rotate(-22 0 34)"/>
-    <rect x="38" y="-98" width="22" height="136" rx="11" fill="#35155D"/>
-    <path d="M60 -98 C108 -78 108 -38 60 -18 L60 -58 Z" fill="#35155D"/>
-    <circle cx="-72" cy="-52" r="14" fill="#C8B6FF"/>
-    <circle cx="88" cy="8" r="10" fill="#F48A94"/>
+  <rect x="84" y="96" width="344" height="320" rx="44" fill="#FFFFFF" stroke="#35155D" stroke-width="16"/>
+  <rect x="98" y="110" width="316" height="178" rx="20" fill="#F4F0FF"/>
+  <rect x="98" y="288" width="316" height="46" fill="#FFFFFF"/>
+  <line x1="98" y1="288" x2="414" y2="288" stroke="#35155D" stroke-width="5"/>
+  <g transform="translate(256 248)">
+    <ellipse cx="0" cy="48" rx="46" ry="38" fill="#35155D" transform="rotate(-22 0 48)"/>
+    <rect x="34" y="-78" width="20" height="130" rx="10" fill="#35155D"/>
+    <path d="M54 -78 C98 -60 98 -26 54 -8 L54 -46 Z" fill="#35155D"/>
   </g>
+  <circle cx="128" cy="168" r="13" fill="#C8B6FF"/>
+  <circle cx="384" cy="200" r="11" fill="#F48A94"/>
+  <circle cx="370" cy="318" r="9" fill="#FED2B5"/>
+  <circle cx="142" cy="318" r="8" fill="#FF8A65"/>
 </svg>
