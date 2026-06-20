@@ -87,13 +87,13 @@ body { touch-action: manipulation; }
 .tiles {
   flex: 1 1 auto;
   min-height: 0;
-  --tile-cols: 1;
-  --tile-size: min(var(--tile-max), 100%);
+  --tile-width: min(var(--tile-max), 100%);
   display: grid;
-  grid-template-columns: minmax(0, var(--tile-size));
-  grid-auto-rows: var(--tile-size);
+  grid-template-columns: minmax(0, var(--tile-width));
+  grid-auto-rows: auto;
   justify-content: center;
   align-content: start;
+  align-items: start;
   gap: var(--tile-gap);
   padding: var(--tile-pad);
   overflow-y: auto;
@@ -103,7 +103,7 @@ body { touch-action: manipulation; }
 .tile {
   position: relative;
   width: 100%;
-  height: 100%;
+  height: auto;
   border-radius: var(--tile-radius);
   background: var(--tile-bg);
   border: 5px solid transparent;
@@ -112,10 +112,11 @@ body { touch-action: manipulation; }
   box-shadow: 0 2px 8px rgba(58, 124, 112, 0.08);
 }
 
-/* Media fills the square minus the fixed title strip */
+/* 16:9 media area — matches YouTube thumbnails */
 .tile-media {
-  position: absolute;
-  inset: 0 0 var(--tile-title-height) 0;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
   overflow: hidden;
 }
 .tile-media img {
@@ -135,12 +136,9 @@ body { touch-action: manipulation; }
   color: var(--sage);
 }
 
-/* Fixed one-line title strip pinned to the bottom */
+/* Fixed one-line title strip below the 16:9 image */
 .tile-title {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  position: relative;
   height: var(--tile-title-height);
   line-height: var(--tile-title-height);
   padding: 0 10px;
