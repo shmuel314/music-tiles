@@ -1,9 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <rect width="512" height="512" rx="112" fill="#FBF6EC"/>
-  <circle cx="256" cy="256" r="150" fill="#DCEFE6"/>
-  <circle cx="196" cy="338" r="52" fill="#2F6E68"/>
-  <circle cx="352" cy="306" r="52" fill="#E0884E"/>
-  <rect x="236" y="150" width="26" height="200" rx="13" fill="#2F6E68"/>
-  <rect x="392" y="124" width="26" height="196" rx="13" fill="#E0884E"/>
-  <path d="M236 178 L418 138 L418 192 L236 232 Z" fill="#2F6E68"/>
+  <!-- Music Tiles — centered, child-friendly app icon (maskable-safe inner ~80%) -->
+  <rect width="512" height="512" rx="112" fill="#FAF4E1"/>
+  <!-- Tile frame -->
+  <rect x="96" y="96" width="320" height="320" rx="64" fill="#E8F0ED"/>
+  <rect x="112" y="112" width="288" height="288" rx="52" fill="#FFFFFF"/>
+  <!-- Simple centered eighth note -->
+  <g transform="translate(256 268)">
+    <!-- note head -->
+    <ellipse cx="0" cy="34" rx="52" ry="44" fill="#E78D15" transform="rotate(-22 0 34)"/>
+    <!-- stem -->
+    <rect x="38" y="-98" width="22" height="136" rx="11" fill="#3A7C70"/>
+    <!-- flag -->
+    <path d="M60 -98 C108 -78 108 -38 60 -18 L60 -58 Z" fill="#3A7C70"/>
+    <!-- small sparkle -->
+    <circle cx="-72" cy="-52" r="14" fill="#FCC23D"/>
+    <circle cx="88" cy="8" r="10" fill="#7FA694"/>
+  </g>
 </svg>

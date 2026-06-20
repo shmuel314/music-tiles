@@ -1,16 +1,16 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="he" dir="rtl">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#FBF6EC" />
+  <meta name="theme-color" content="#FAF4E1" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="apple-mobile-web-app-title" content="Music" />
+  <meta name="apple-mobile-web-app-title" content="מוזיקה" />
   <link rel="apple-touch-icon" href="./icon.svg" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="stylesheet" href="./styles.css" />
-  <title>Music</title>
+  <title>אריחי מוזיקה</title>
 </head>
 <body>
   <!-- Hidden admin trigger: long-press this top-left corner ~3s -->
@@ -19,28 +19,28 @@
   <!-- CHILD SCREEN -->
   <main id="child-screen">
     <div id="tiles" class="tiles"></div>
-    <div id="empty-hint" class="empty-hint" hidden dir="rtl" lang="he">
+    <div id="empty-hint" class="empty-hint" hidden>
       <p>אין שירים עדיין.</p>
       <p class="small">לחיצה ארוכה על הפינה השמאלית העליונה פותחת את אזור ההורים.</p>
     </div>
 
     <!-- Small, unobtrusive playback bar -->
     <footer id="controls" class="controls" hidden>
-      <button id="btn-prev" class="ctrl" aria-label="Previous">
-        <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+      <button id="btn-prev" class="ctrl" aria-label="שיר קודם">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
       </button>
-      <button id="btn-playpause" class="ctrl ctrl-main" aria-label="Play or pause">
-        <svg id="icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-        <svg id="icon-pause" viewBox="0 0 24 24" hidden><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
+      <button id="btn-playpause" class="ctrl ctrl-main" aria-label="ניגון או השהיה">
+        <svg id="icon-play" class="ctrl-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+        <svg id="icon-pause" class="ctrl-icon icon-hidden" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
       </button>
-      <button id="btn-next" class="ctrl" aria-label="Next">
-        <svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2zM6 6l8.5 6L6 18z"/></svg>
+      <button id="btn-next" class="ctrl" aria-label="שיר הבא">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 6h2v12h-2zM6 6l8.5 6L6 18z"/></svg>
       </button>
     </footer>
   </main>
 
   <!-- PIN SCREEN -->
-  <section id="pin-screen" class="overlay" hidden dir="rtl" lang="he">
+  <section id="pin-screen" class="overlay" hidden>
     <div class="pin-box">
       <h2 id="pin-title">הזנת קוד</h2>
       <div id="pin-dots" class="pin-dots"></div>
@@ -57,7 +57,7 @@
   </section>
 
   <!-- ADMIN SCREEN -->
-  <section id="admin-screen" class="overlay admin" hidden dir="rtl" lang="he">
+  <section id="admin-screen" class="overlay admin" hidden>
     <header class="admin-header">
       <h1>אזור הורים</h1>
       <button id="admin-done" class="btn btn-primary">סיום</button>
@@ -73,6 +73,7 @@
         <h3>עוצמת שמע מרבית</h3>
         <input id="volume-cap" type="range" min="0" max="100" step="5" />
         <span id="volume-cap-label">80%</span>
+        <p class="small muted volume-note">הגבלה זו חלה על הנגן בלבד. כפתורי עוצמת השמע של המכשיר עדיין יכולים לשנות את עוצמת השמע הכללית — לשליטה מלאה השתמשו בנגישות מודרכת (iOS) או במצב קיוסק (Android).</p>
       </div>
 
       <div class="card">
@@ -86,8 +87,13 @@
       <div class="card">
         <div class="card-row">
           <h3 id="songs-title">שירים</h3>
-          <button id="add-song" class="btn btn-primary">+ הוספת שיר</button>
+          <div class="card-row-actions">
+            <button id="bulk-import-songs" class="btn">+ ייבוא מרובה</button>
+            <button id="add-song" class="btn btn-primary">+ הוספת שיר</button>
+          </div>
         </div>
+        <p class="small muted">ייבוא מרובה: בחרו מספר קבצי שמע בבת אחת. שם השיר יילקח משם הקובץ, ללא תמונה.</p>
+        <input id="bulk-audio" type="file" accept="audio/*" multiple hidden />
         <ul id="song-list" class="list"></ul>
       </div>
 
@@ -113,7 +119,7 @@
   </section>
 
   <!-- ADD / EDIT SONG MODAL -->
-  <section id="song-modal" class="overlay modal" hidden dir="rtl" lang="he">
+  <section id="song-modal" class="overlay modal" hidden>
     <div class="modal-box">
       <h2 id="song-modal-title">הוספת שיר</h2>
 
@@ -148,7 +154,7 @@
   </section>
 
   <!-- IMPORT MODE MODAL -->
-  <section id="import-modal" class="overlay modal" hidden dir="rtl" lang="he">
+  <section id="import-modal" class="overlay modal" hidden>
     <div class="modal-box">
       <h2>ייבוא ספרייה</h2>
       <p id="import-summary" class="small muted"></p>
@@ -162,7 +168,7 @@
     </div>
   </section>
 
-  <div id="toast" class="toast" hidden dir="rtl" lang="he"></div>
+  <div id="toast" class="toast" hidden role="status" aria-live="polite"></div>
 
   <script src="./db.js"></script>
   <script src="./app.js"></script>

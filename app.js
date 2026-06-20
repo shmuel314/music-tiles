@@ -45,6 +45,8 @@
     playlistList: $('playlist-list'),
     songsTitle: $('songs-title'),
     addSong: $('add-song'),
+    bulkImportSongs: $('bulk-import-songs'),
+    bulkAudio: $('bulk-audio'),
     songList: $('song-list'),
     changePin: $('change-pin'),
     exportFull: $('export-full'),
@@ -87,6 +89,15 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => (el.toast.hidden = true), 2200);
   }
+
+  function titleFromFileName(name) {
+    return name.replace(/\.[^.]+$/, '').trim();
+  }
+
+  function syncPlaybackState() {
+    state.isPlaying = !!state.currentSongId && !audio.paused && !audio.ended;
+    updatePlayingIndicator();
+  }
   function blobToDataURL(blob) {
     return new Promise((resolve, reject) => {
       const r = new FileReader();
@@ -115,7 +126,7 @@
     const playlists = await DB.getPlaylists();
     if (playlists.length === 0) {
       const id = DB.uid();
-      await DB.savePlaylist({ id, name: 'My Songs', order: 0 });
+      await DB.savePlaylist({ id, name: 'השירים שלי', order: 0 });
       await DB.setSetting('activePlaylistId', id);
     }
     if ((await DB.getSetting('pin', null)) === null) {
@@ -182,14 +193,17 @@
       tile.addEventListener('click', () => onTileTap(song.id));
       el.tiles.appendChild(tile);
     }
+    syncPlaybackState();
   }
 
   function updatePlayingIndicator() {
+    const playing = state.isPlaying;
     el.tiles.querySelectorAll('.tile').forEach((t) => {
-      t.classList.toggle('playing', t.dataset.id === state.currentSongId && state.isPlaying);
+      t.classList.toggle('playing', t.dataset.id === state.currentSongId && playing);
     });
-    el.iconPlay.hidden = state.isPlaying;
-    el.iconPause.hidden = !state.isPlaying;
+    el.iconPlay.classList.toggle('icon-hidden', playing);
+    el.iconPause.classList.toggle('icon-hidden', !playing);
+    el.btnPlayPause.setAttribute('aria-label', playing ? 'השהיה' : 'ניגון');
   }
 
   // ---- Playback (with debounce + volume cap) ----
@@ -198,21 +212,31 @@
     if (now - state.lastTapAt < TAP_DEBOUNCE_MS) return; // ignore rapid/double taps
     state.lastTapAt = now;
 
-    if (songId === state.currentSongId && state.isPlaying) return; // already playing this one
+    if (songId === state.currentSongId && !audio.paused) return; // already playing this one
     playSong(songId);
   }
+
+  let playbackToken = 0;
+  let switchingTrack = false;
 
   function playSong(songId) {
     const song = state.songs.find((s) => s.id === songId);
     if (!song || !song.audio) return;
+    const token = ++playbackToken;
+    switchingTrack = true;
     revokeAudioUrl();
     audio.src = objectUrl(song.audio);
     audio.volume = state.volumeCap;
     state.currentSongId = songId;
     audio.play().then(() => {
-      state.isPlaying = true;
-      updatePlayingIndicator();
+      if (token !== playbackToken) return;
+      switchingTrack = false;
+      syncPlaybackState();
     }).catch(() => {
+      if (token !== playbackToken) return;
+      switchingTrack = false;
+      state.isPlaying = false;
+      updatePlayingIndicator();
       toast('לא ניתן לנגן את השיר הזה');
     });
   }
@@ -245,7 +269,8 @@
       playSong(state.songs[0].id);
       return;
     }
-    if (state.isPlaying) {
+    if (!state.currentSongId) return;
+    if (!audio.paused) {
       audio.pause();
     } else {
       audio.play().catch(() => {});
@@ -396,8 +421,8 @@
 
       const actions = document.createElement('div');
       actions.className = 'row-actions';
-      actions.appendChild(iconBtn('\u270E', 'Rename', () => renamePlaylist(p)));
-      const delBtn = iconBtn('\u2715', 'Delete', () => removePlaylist(p));
+      actions.appendChild(iconBtn('\u270E', 'שינוי שם', () => renamePlaylist(p)));
+      const delBtn = iconBtn('\u2715', 'מחיקה', () => removePlaylist(p));
       delBtn.classList.add('danger');
       delBtn.disabled = state.playlists.length <= 1;
       actions.appendChild(delBtn);
@@ -429,12 +454,12 @@
 
       const actions = document.createElement('div');
       actions.className = 'row-actions';
-      const up = iconBtn('\u2191', 'Move up', () => moveSong(songs, i, -1));
+      const up = iconBtn('\u2191', 'הזזה למעלה', () => moveSong(songs, i, -1));
       up.disabled = i === 0;
-      const down = iconBtn('\u2193', 'Move down', () => moveSong(songs, i, 1));
+      const down = iconBtn('\u2193', 'הזזה למטה', () => moveSong(songs, i, 1));
       down.disabled = i === songs.length - 1;
-      const edit = iconBtn('\u270E', 'Edit', () => openSongModal(s));
-      const del = iconBtn('\u2715', 'Delete', () => removeSong(s));
+      const edit = iconBtn('\u270E', 'עריכה', () => openSongModal(s));
+      const del = iconBtn('\u2715', 'מחיקה', () => removeSong(s));
       del.classList.add('danger');
       actions.append(up, down, edit, del);
       li.appendChild(actions);
@@ -526,6 +551,44 @@
     draft.audioBlob = file;
     draft.keepAudio = false;
     el.audioName.textContent = file.name;
+    el.songTitle.value = titleFromFileName(file.name);
+  }
+
+  async function bulkImportSongs(files) {
+    const playlistId = el.activePlaylistSelect.value;
+    if (!playlistId) {
+      toast('יש לבחור רשימת השמעה');
+      return;
+    }
+    const audioFiles = Array.from(files || []).filter((f) => {
+      if (!f) return false;
+      if (f.type.startsWith('audio/')) return true;
+      return /\.(mp3|m4a|wav|ogg|aac|flac|webm|opus)$/i.test(f.name);
+    });
+    if (audioFiles.length === 0) {
+      toast('לא נבחרו קבצי שמע');
+      return;
+    }
+
+    toast(`מייבא ${audioFiles.length} שירים...`);
+    const existing = await DB.getSongsByPlaylist(playlistId);
+    let order = existing.length;
+    let imported = 0;
+
+    for (const file of audioFiles) {
+      await DB.saveSong({
+        id: DB.uid(),
+        title: titleFromFileName(file.name),
+        playlistId,
+        order: order++,
+        sourceType: 'LOCAL',
+        audio: file
+      });
+      imported++;
+    }
+
+    await renderSongList();
+    toast(imported === 1 ? 'שיר אחד יובא' : `${imported} שירים יובאו`);
   }
 
   async function saveSongDraft() {
@@ -608,7 +671,7 @@
     const a = document.createElement('a');
     a.href = url;
     const kind = includeAudio ? 'full' : 'meta';
-    a.download = `music-tiles-${kind}-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `arhazei-muzika-${kind}-${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -761,9 +824,15 @@
     el.btnNext.addEventListener('click', () => playByOffset(1));
     el.btnPrev.addEventListener('click', () => playByOffset(-1));
 
-    audio.addEventListener('play', () => { state.isPlaying = true; updatePlayingIndicator(); });
-    audio.addEventListener('pause', () => { state.isPlaying = false; updatePlayingIndicator(); });
-    audio.addEventListener('ended', () => { state.isPlaying = false; updatePlayingIndicator(); });
+    audio.addEventListener('play', syncPlaybackState);
+    audio.addEventListener('pause', () => {
+      if (switchingTrack) return;
+      syncPlaybackState();
+    });
+    audio.addEventListener('ended', () => {
+      state.isPlaying = false;
+      updatePlayingIndicator();
+    });
 
     // PIN pad
     el.pinDots.parentElement.querySelectorAll('.pin-pad button').forEach((b) => {
@@ -791,6 +860,11 @@
     });
     el.addPlaylist.addEventListener('click', addPlaylist);
     el.addSong.addEventListener('click', () => openSongModal(null));
+    el.bulkImportSongs.addEventListener('click', () => el.bulkAudio.click());
+    el.bulkAudio.addEventListener('change', (e) => {
+      bulkImportSongs(e.target.files);
+      e.target.value = '';
+    });
     el.changePin.addEventListener('click', openChangePin);
     el.exportFull.addEventListener('click', () => exportData(true));
     el.exportMeta.addEventListener('click', () => exportData(false));
@@ -808,10 +882,17 @@
     el.songCancel.addEventListener('click', () => (el.songModal.hidden = true));
     el.songSave.addEventListener('click', saveSongDraft);
 
-    // Keep audio playing within the cap if some other code changes volume
-    audio.addEventListener('volumechange', () => {
-      if (audio.volume > state.volumeCap + 0.001) audio.volume = state.volumeCap;
-    });
+    // Keep audio playing within the cap if volume is changed programmatically
+    audio.addEventListener('volumechange', enforceVolumeCap);
+
+    // During playback, re-apply cap (browsers cannot block hardware volume buttons)
+    setInterval(() => {
+      if (!audio.paused && !audio.ended) enforceVolumeCap();
+    }, 500);
+  }
+
+  function enforceVolumeCap() {
+    if (audio.volume > state.volumeCap + 0.001) audio.volume = state.volumeCap;
   }
 
   function registerServiceWorker() {

@@ -1,14 +1,15 @@
 {
-  "name": "Music Tiles",
-  "short_name": "Music",
-  "description": "A simple, safe, offline music player with big picture tiles for children.",
+  "name": "אריחי מוזיקה",
+  "short_name": "מוזיקה",
+  "description": "נגן מוזיקה פשוט, בטוח ולא מקוון עם אריחי תמונה גדולים לילדים.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "fullscreen",
   "orientation": "any",
-  "background_color": "#FBF6EC",
-  "theme_color": "#FBF6EC",
-  "lang": "en",
+  "background_color": "#FAF4E1",
+  "theme_color": "#FAF4E1",
+  "lang": "he",
+  "dir": "rtl",
   "icons": [
     {
       "src": "./icon.svg",
