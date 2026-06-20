@@ -93,7 +93,7 @@ body { touch-action: manipulation; }
 .admin-entry-btn {
   background: var(--surface);
   color: var(--brand-deep);
-  border: 2px solid var(--brand-lavender);
+  border: 2px solid var(--brand-deep);
   border-radius: 999px;
   padding: 7px 14px;
   font-size: 14px;
@@ -138,7 +138,7 @@ body { touch-action: manipulation; }
   min-width: 0;
   border-radius: var(--tile-radius);
   background: var(--surface-white);
-  border: 3px solid var(--border);
+  border: 3px solid var(--brand-deep);
   overflow: hidden;
   cursor: pointer;
   box-shadow: var(--shadow-subtle);
@@ -166,8 +166,8 @@ body { touch-action: manipulation; }
   align-items: center;
   justify-content: center;
   font-size: clamp(28px, 8vw, 48px);
-  color: var(--brand-lavender);
-  opacity: 0.85;
+  color: var(--brand-deep);
+  opacity: 0.45;
 }
 
 .tile-title {
@@ -184,7 +184,7 @@ body { touch-action: manipulation; }
   font-weight: 500;
   color: var(--text);
   background: var(--surface-white);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--brand-deep);
   overflow: hidden;
 }
 .tile-title-text {
@@ -233,8 +233,8 @@ body { touch-action: manipulation; }
 }
 
 .ctrl {
-  background: var(--surface);
-  border: 2px solid var(--brand-lavender);
+  background: var(--brand-deep);
+  border: 2px solid var(--brand-deep);
   border-radius: 50%;
   width: 48px;
   height: 48px;
@@ -242,7 +242,7 @@ body { touch-action: manipulation; }
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: var(--brand-deep);
+  color: var(--surface-white);
 }
 .ctrl svg { width: 24px; height: 24px; fill: currentColor; }
 .ctrl-icon { display: block; }
@@ -250,14 +250,14 @@ body { touch-action: manipulation; }
 .ctrl-main {
   width: 52px;
   height: 52px;
-  background: var(--cta-coral);
-  border-color: var(--cta-coral);
-  color: var(--on-accent);
-  box-shadow: 0 4px 14px rgba(255, 138, 101, 0.28);
+  background: var(--brand-deep);
+  border-color: var(--brand-deep);
+  color: var(--surface-white);
+  box-shadow: 0 4px 14px rgba(53, 21, 93, 0.22);
 }
 .ctrl-main:active {
-  background: var(--cta-coral-strong);
-  border-color: var(--cta-coral-strong);
+  background: var(--primary-strong);
+  border-color: var(--primary-strong);
 }
 .ctrl-main svg { width: 28px; height: 28px; }
 
