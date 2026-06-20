@@ -19,9 +19,9 @@
   <!-- CHILD SCREEN -->
   <main id="child-screen">
     <div id="tiles" class="tiles"></div>
-    <div id="empty-hint" class="empty-hint" hidden>
-      <p>No songs yet.</p>
-      <p class="small">Press &amp; hold the top-left corner to open the parent area.</p>
+    <div id="empty-hint" class="empty-hint" hidden dir="rtl" lang="he">
+      <p>אין שירים עדיין.</p>
+      <p class="small">לחיצה ארוכה על הפינה השמאלית העליונה פותחת את אזור ההורים.</p>
     </div>
 
     <!-- Small, unobtrusive playback bar -->
@@ -40,106 +40,129 @@
   </main>
 
   <!-- PIN SCREEN -->
-  <section id="pin-screen" class="overlay" hidden>
+  <section id="pin-screen" class="overlay" hidden dir="rtl" lang="he">
     <div class="pin-box">
-      <h2 id="pin-title">Enter PIN</h2>
+      <h2 id="pin-title">הזנת קוד</h2>
       <div id="pin-dots" class="pin-dots"></div>
       <div class="pin-pad">
         <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button>
         <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button>
         <button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button>
-        <button data-key="cancel" class="pin-secondary">Cancel</button>
+        <button data-key="cancel" class="pin-secondary">ביטול</button>
         <button data-key="0">0</button>
         <button data-key="back" class="pin-secondary">&#9003;</button>
       </div>
-      <p id="pin-error" class="pin-error" hidden>Wrong PIN</p>
+      <p id="pin-error" class="pin-error" hidden>קוד שגוי</p>
     </div>
   </section>
 
   <!-- ADMIN SCREEN -->
-  <section id="admin-screen" class="overlay admin" hidden>
+  <section id="admin-screen" class="overlay admin" hidden dir="rtl" lang="he">
     <header class="admin-header">
-      <h1>Parent Area</h1>
-      <button id="admin-done" class="btn btn-primary">Done</button>
+      <h1>אזור הורים</h1>
+      <button id="admin-done" class="btn btn-primary">סיום</button>
     </header>
 
     <div class="admin-body">
       <div class="card">
-        <h3>Active playlist (what the child sees)</h3>
+        <h3>רשימת ההשמעה הפעילה (מה שהילד רואה)</h3>
         <select id="active-playlist-select"></select>
       </div>
 
       <div class="card">
-        <h3>Maximum volume</h3>
+        <h3>עוצמת שמע מרבית</h3>
         <input id="volume-cap" type="range" min="0" max="100" step="5" />
         <span id="volume-cap-label">80%</span>
       </div>
 
       <div class="card">
         <div class="card-row">
-          <h3>Playlists</h3>
-          <button id="add-playlist" class="btn">+ New</button>
+          <h3>רשימות השמעה</h3>
+          <button id="add-playlist" class="btn">+ חדשה</button>
         </div>
         <ul id="playlist-list" class="list"></ul>
       </div>
 
       <div class="card">
         <div class="card-row">
-          <h3 id="songs-title">Songs</h3>
-          <button id="add-song" class="btn btn-primary">+ Add song</button>
+          <h3 id="songs-title">שירים</h3>
+          <button id="add-song" class="btn btn-primary">+ הוספת שיר</button>
         </div>
         <ul id="song-list" class="list"></ul>
       </div>
 
       <div class="card">
-        <h3>Security &amp; backup</h3>
+        <h3>אבטחה</h3>
         <div class="btn-group">
-          <button id="change-pin" class="btn">Change PIN</button>
-          <button id="export-data" class="btn">Export backup</button>
-          <button id="import-data" class="btn">Import backup</button>
+          <button id="change-pin" class="btn">שינוי קוד</button>
         </div>
-        <input id="import-file" type="file" accept="application/json" hidden />
-        <p class="small muted">Back up regularly. Songs live only on this device; a backup is the only way to move them to a new phone.</p>
+      </div>
+
+      <div class="card">
+        <h3>גיבוי ושיתוף</h3>
+        <p class="small muted">צרו קובץ גיבוי אחד שניתן לשלוח להורה השני (וואטסאפ, מייל, Drive). השירים נשמרים רק במכשיר הזה — קובץ הגיבוי הוא הדרך היחידה להעביר אותם למכשיר אחר.</p>
+        <div class="btn-group">
+          <button id="export-full" class="btn btn-primary">ייצוא מלא (כולל קבצי שמע)</button>
+          <button id="export-meta" class="btn">ייצוא מטא־דאטה בלבד</button>
+          <button id="import-data" class="btn">ייבוא ספרייה</button>
+        </div>
+        <input id="import-file" type="file" accept="application/json,.json" hidden />
+        <p class="small muted">ייצוא מלא כולל את קבצי השמע והתמונות (קובץ גדול, מומלץ לשיתוף). ייצוא מטא־דאטה כולל רשימות, שמות, סדר ותמונות בלבד — ללא קבצי שמע (קובץ קטן).</p>
       </div>
     </div>
   </section>
 
   <!-- ADD / EDIT SONG MODAL -->
-  <section id="song-modal" class="overlay modal" hidden>
+  <section id="song-modal" class="overlay modal" hidden dir="rtl" lang="he">
     <div class="modal-box">
-      <h2 id="song-modal-title">Add song</h2>
+      <h2 id="song-modal-title">הוספת שיר</h2>
 
       <div class="field">
-        <span>Picture (tile image)</span>
-        <div id="img-preview" class="img-preview">Tap to choose a picture</div>
+        <span>תמונה (לאריח)</span>
+        <div id="img-preview" class="img-preview">בחירת תמונה</div>
         <input id="song-image" type="file" accept="image/*" hidden />
       </div>
 
       <div class="field">
-        <span>Audio file</span>
-        <button type="button" id="pick-audio" class="btn">Choose audio file</button>
-        <span id="audio-name" class="small muted">No file selected</span>
+        <span>קובץ שמע</span>
+        <button type="button" id="pick-audio" class="btn">בחירת קובץ שמע</button>
+        <span id="audio-name" class="small muted">לא נבחר קובץ</span>
         <input id="song-audio" type="file" accept="audio/*" hidden />
       </div>
 
       <label class="field">
-        <span>Name (optional, for parent only)</span>
-        <input id="song-title" type="text" placeholder="e.g. Wheels on the Bus" />
+        <span>שם (לא חובה, להורים בלבד)</span>
+        <input id="song-title" type="text" placeholder="למשל: גלגלי האוטובוס" />
       </label>
 
       <label class="field">
-        <span>Playlist</span>
+        <span>רשימת השמעה</span>
         <select id="song-playlist"></select>
       </label>
 
       <div class="modal-actions">
-        <button id="song-cancel" class="btn">Cancel</button>
-        <button id="song-save" class="btn btn-primary">Save</button>
+        <button id="song-cancel" class="btn">ביטול</button>
+        <button id="song-save" class="btn btn-primary">שמירה</button>
       </div>
     </div>
   </section>
 
-  <div id="toast" class="toast" hidden></div>
+  <!-- IMPORT MODE MODAL -->
+  <section id="import-modal" class="overlay modal" hidden dir="rtl" lang="he">
+    <div class="modal-box">
+      <h2>ייבוא ספרייה</h2>
+      <p id="import-summary" class="small muted"></p>
+      <p>כיצד לייבא את הספרייה?</p>
+      <div class="modal-actions modal-actions-stacked">
+        <button id="import-merge" class="btn btn-primary">מיזוג עם הספרייה הקיימת (מומלץ)</button>
+        <button id="import-replace" class="btn">החלפת הספרייה הקיימת</button>
+        <button id="import-cancel" class="btn">ביטול</button>
+      </div>
+      <p class="small muted">מיזוג מוסיף שירים ורשימות חדשים מבלי למחוק את הקיימים. החלפה מוחקת את כל הספרייה הנוכחית ומחליפה אותה בקובץ.</p>
+    </div>
+  </section>
+
+  <div id="toast" class="toast" hidden dir="rtl" lang="he"></div>
 
   <script src="./db.js"></script>
   <script src="./app.js"></script>

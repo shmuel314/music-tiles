@@ -47,9 +47,15 @@
     addSong: $('add-song'),
     songList: $('song-list'),
     changePin: $('change-pin'),
-    exportData: $('export-data'),
+    exportFull: $('export-full'),
+    exportMeta: $('export-meta'),
     importData: $('import-data'),
     importFile: $('import-file'),
+    importModal: $('import-modal'),
+    importSummary: $('import-summary'),
+    importMerge: $('import-merge'),
+    importReplace: $('import-replace'),
+    importCancel: $('import-cancel'),
     songModal: $('song-modal'),
     songModalTitle: $('song-modal-title'),
     imgPreview: $('img-preview'),
@@ -207,7 +213,7 @@
       state.isPlaying = true;
       updatePlayingIndicator();
     }).catch(() => {
-      toast('Could not play this song');
+      toast('לא ניתן לנגן את השיר הזה');
     });
   }
 
@@ -266,7 +272,7 @@
   function openPinScreen() {
     pin.entered = '';
     pin.mode = 'verify';
-    el.pinTitle.textContent = 'Enter PIN';
+    el.pinTitle.textContent = 'הזנת קוד';
     el.pinError.hidden = true;
     renderPinDots();
     el.pinScreen.hidden = false;
@@ -275,7 +281,7 @@
     pin.entered = '';
     pin.mode = 'set-new';
     pin.firstEntry = '';
-    el.pinTitle.textContent = 'New PIN';
+    el.pinTitle.textContent = 'קוד חדש';
     el.pinError.hidden = true;
     renderPinDots();
     el.adminScreen.hidden = true;
@@ -321,21 +327,21 @@
       pin.firstEntry = pin.entered;
       pin.mode = 'set-confirm';
       pin.entered = '';
-      el.pinTitle.textContent = 'Confirm PIN';
+      el.pinTitle.textContent = 'אישור קוד';
       renderPinDots();
     } else if (pin.mode === 'set-confirm') {
       if (pin.entered === pin.firstEntry) {
         await DB.setSetting('pin', pin.entered);
         el.pinScreen.hidden = true;
         el.adminScreen.hidden = false;
-        toast('PIN changed');
+        toast('הקוד שונה');
       } else {
-        el.pinError.textContent = 'PINs did not match';
+        el.pinError.textContent = 'הקודים אינם תואמים';
         el.pinError.hidden = false;
         pin.mode = 'set-new';
         pin.firstEntry = '';
         pin.entered = '';
-        el.pinTitle.textContent = 'New PIN';
+        el.pinTitle.textContent = 'קוד חדש';
         renderPinDots();
       }
     }
@@ -383,7 +389,7 @@
       if (p.id === state.activePlaylistId) {
         const pill = document.createElement('span');
         pill.className = 'active-pill';
-        pill.textContent = 'ACTIVE';
+        pill.textContent = 'פעילה';
         grow.appendChild(pill);
       }
       li.appendChild(grow);
@@ -403,7 +409,7 @@
   async function renderSongList() {
     const pid = el.activePlaylistSelect.value;
     const activeName = state.playlists.find((p) => p.id === pid)?.name || '';
-    el.songsTitle.textContent = 'Songs in "' + activeName + '"';
+    el.songsTitle.textContent = 'שירים ב„' + activeName + '”';
     const songs = pid ? await DB.getSongsByPlaylist(pid) : [];
     el.songList.innerHTML = '';
     songs.forEach((s, i) => {
@@ -417,7 +423,7 @@
       grow.className = 'grow';
       const name = document.createElement('span');
       name.className = 'name';
-      name.textContent = s.title || 'Untitled';
+      name.textContent = s.title || 'ללא שם';
       grow.appendChild(name);
       li.appendChild(grow);
 
@@ -458,7 +464,7 @@
   }
 
   async function renamePlaylist(p) {
-    const name = prompt('Playlist name:', p.name);
+    const name = prompt('שם הרשימה:', p.name);
     if (name && name.trim()) {
       p.name = name.trim();
       await DB.savePlaylist(p);
@@ -466,7 +472,7 @@
     }
   }
   async function addPlaylist() {
-    const name = prompt('New playlist name:', '');
+    const name = prompt('שם רשימה חדשה:', '');
     if (name && name.trim()) {
       await DB.savePlaylist({ id: DB.uid(), name: name.trim(), order: state.playlists.length });
       await refreshAdmin();
@@ -474,7 +480,7 @@
   }
   async function removePlaylist(p) {
     if (state.playlists.length <= 1) return;
-    if (!confirm(`Delete playlist "${p.name}" and all its songs?`)) return;
+    if (!confirm(`למחוק את הרשימה „${p.name}” ואת כל השירים שבה?`)) return;
     await DB.deletePlaylist(p.id);
     if (state.activePlaylistId === p.id) {
       const remaining = await DB.getPlaylists();
@@ -483,7 +489,7 @@
     await refreshAdmin();
   }
   async function removeSong(s) {
-    if (!confirm(`Delete "${s.title || 'this song'}"?`)) return;
+    if (!confirm(`למחוק את „${s.title || 'השיר הזה'}”?`)) return;
     await DB.deleteSong(s.id);
     await renderSongList();
   }
@@ -498,12 +504,12 @@
     draft.keepImage = !!(song && song.image);
     draft.keepAudio = !!(song && song.audio);
 
-    el.songModalTitle.textContent = song ? 'Edit song' : 'Add song';
+    el.songModalTitle.textContent = song ? 'עריכת שיר' : 'הוספת שיר';
     el.songTitle.value = song ? (song.title || '') : '';
     el.songPlaylist.value = song ? song.playlistId : el.activePlaylistSelect.value;
-    el.audioName.textContent = draft.keepAudio ? 'Current audio kept' : 'No file selected';
+    el.audioName.textContent = draft.keepAudio ? 'הקובץ הקיים נשמר' : 'לא נבחר קובץ';
     el.imgPreview.style.backgroundImage = song && song.image ? `url(${objectUrl(song.image)})` : '';
-    el.imgPreview.textContent = song && song.image ? '' : 'Tap to choose a picture';
+    el.imgPreview.textContent = song && song.image ? '' : 'בחירת תמונה';
     el.songModal.hidden = false;
   }
 
@@ -524,8 +530,8 @@
 
   async function saveSongDraft() {
     const playlistId = el.songPlaylist.value;
-    if (!playlistId) { toast('Choose a playlist'); return; }
-    if (!draft.id && !draft.audioBlob) { toast('Choose an audio file'); return; }
+    if (!playlistId) { toast('יש לבחור רשימת השמעה'); return; }
+    if (!draft.id && !draft.audioBlob) { toast('יש לבחור קובץ שמע'); return; }
 
     let song;
     if (draft.id) {
@@ -534,7 +540,7 @@
     }
     if (!song) {
       const existing = await DB.getSongsByPlaylist(playlistId);
-      song = { id: DB.uid(), order: existing.length };
+      song = { id: DB.uid(), order: existing.length, sourceType: 'LOCAL' };
     }
     song.title = el.songTitle.value.trim();
     song.playlistId = playlistId;
@@ -543,15 +549,33 @@
 
     await DB.saveSong(song);
     el.songModal.hidden = true;
-    toast('Saved');
+    toast('נשמר');
     await renderSongList();
   }
 
-  // ---- Backup / restore ----
-  async function exportData() {
-    toast('Preparing backup...');
-    const playlists = await DB.getPlaylists();
+  // ---- Backup / share ----
+  // Export format (one self-contained JSON file that can be sent to the other parent):
+  //   { app, version, exportedAt, includesAudio, settings:{activePlaylistId, volumeCap, offlineMode},
+  //     playlists:[...], songs:[{ id, title, playlistId, order, sourceType, spotifyUri, image, audio }] }
+  async function exportData(includeAudio) {
     const songsRaw = await DB.getAllSongs();
+
+    // Warn about large full exports (audio dominates the size).
+    if (includeAudio) {
+      let audioBytes = 0;
+      for (const s of songsRaw) if (s.audio) audioBytes += s.audio.size || 0;
+      const mb = audioBytes / (1024 * 1024);
+      if (mb > 75) {
+        const ok = confirm(
+          `קובץ הייצוא המלא גדול (~${Math.round(mb)} מ"ב) ועלול לקחת זמן ולהיכשל בשליחה.\n` +
+          `אפשר לבחור במקום זאת "ייצוא מטא־דאטה בלבד" (קובץ קטן).\n\nלהמשיך בייצוא המלא?`
+        );
+        if (!ok) return;
+      }
+    }
+
+    toast('מכין קובץ...');
+    const playlists = (await DB.getPlaylists()).map((p) => ({ id: p.id, name: p.name, order: p.order ?? 0 }));
     const songs = [];
     for (const s of songsRaw) {
       songs.push({
@@ -559,60 +583,173 @@
         title: s.title || '',
         playlistId: s.playlistId,
         order: s.order ?? 0,
+        sourceType: s.sourceType || 'LOCAL',
+        spotifyUri: s.spotifyUri || null,
         image: s.image ? await blobToDataURL(s.image) : null,
-        audio: s.audio ? await blobToDataURL(s.audio) : null
+        audio: includeAudio && s.audio ? await blobToDataURL(s.audio) : null
       });
     }
     const payload = {
       app: 'music-tiles',
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
-      activePlaylistId: await DB.getSetting('activePlaylistId', null),
-      volumeCap: state.volumeCap,
+      includesAudio: !!includeAudio,
+      settings: {
+        activePlaylistId: await DB.getSetting('activePlaylistId', null),
+        volumeCap: state.volumeCap,
+        offlineMode: await DB.getSetting('offlineMode', true)
+      },
       playlists,
       songs
     };
+
     const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `music-tiles-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    const kind = includeAudio ? 'full' : 'meta';
+    a.download = `music-tiles-${kind}-${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(a);
     a.click();
     a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    setTimeout(() => URL.revokeObjectURL(url), 8000);
+    toast(includeAudio ? 'הייצוא המלא נוצר' : 'ייצוא המטא־דאטה נוצר');
   }
 
-  async function importData(file) {
+  // Holds a validated import payload between picking the file and choosing merge/replace.
+  let pendingImport = null;
+
+  async function pickImportFile(file) {
     if (!file) return;
-    if (!confirm('Importing will REPLACE all current songs and playlists with the backup. Continue?')) return;
     try {
       const text = await file.text();
       const data = JSON.parse(text);
-      if (data.app !== 'music-tiles') throw new Error('Not a Music Tiles backup');
+      if (!data || data.app !== 'music-tiles' || !Array.isArray(data.playlists) || !Array.isArray(data.songs)) {
+        throw new Error('format');
+      }
+      pendingImport = data;
+      const hasAudio = data.includesAudio || data.songs.some((s) => s.audio);
+      el.importSummary.textContent =
+        `נמצאו ${data.playlists.length} רשימות ו-${data.songs.length} שירים ` +
+        (hasAudio ? '(כולל קבצי שמע).' : '(ללא קבצי שמע — השירים יתווספו אך לא ינוגנו עד שיתווסף קובץ שמע).');
+      el.importModal.hidden = false;
+    } catch (e) {
+      toast(e.message === 'format' ? 'הקובץ אינו קובץ גיבוי תקין של היישום' : 'הייבוא נכשל: קובץ פגום');
+    } finally {
+      el.importFile.value = '';
+    }
+  }
 
-      await DB.clearStore('songs');
-      await DB.clearStore('playlists');
-      for (const p of data.playlists || []) await DB.savePlaylist(p);
-      for (const s of data.songs || []) {
-        await DB.saveSong({
-          id: s.id,
-          title: s.title || '',
-          playlistId: s.playlistId,
-          order: s.order ?? 0,
-          image: s.image ? await dataURLToBlob(s.image) : undefined,
-          audio: s.audio ? await dataURLToBlob(s.audio) : undefined
-        });
+  function toSongRecord(s, playlistId) {
+    const rec = {
+      id: s.id,
+      title: s.title || '',
+      playlistId,
+      order: s.order ?? 0,
+      sourceType: s.sourceType || 'LOCAL'
+    };
+    if (s.spotifyUri) rec.spotifyUri = s.spotifyUri;
+    return rec;
+  }
+
+  async function doReplace(data) {
+    await DB.clearStore('songs');
+    await DB.clearStore('playlists');
+    for (const p of data.playlists) {
+      await DB.savePlaylist({ id: p.id, name: p.name, order: p.order ?? 0 });
+    }
+    for (const s of data.songs) {
+      const rec = toSongRecord(s, s.playlistId);
+      if (s.image) rec.image = await dataURLToBlob(s.image);
+      if (s.audio) rec.audio = await dataURLToBlob(s.audio);
+      await DB.saveSong(rec);
+    }
+    if (data.settings) {
+      if (data.settings.activePlaylistId) await DB.setSetting('activePlaylistId', data.settings.activePlaylistId);
+      if (typeof data.settings.volumeCap === 'number') {
+        state.volumeCap = data.settings.volumeCap;
+        await DB.setSetting('volumeCap', data.settings.volumeCap);
       }
-      if (data.activePlaylistId) await DB.setSetting('activePlaylistId', data.activePlaylistId);
-      if (typeof data.volumeCap === 'number') {
-        state.volumeCap = data.volumeCap;
-        await DB.setSetting('volumeCap', data.volumeCap);
+      if (typeof data.settings.offlineMode === 'boolean') await DB.setSetting('offlineMode', data.settings.offlineMode);
+    }
+  }
+
+  async function doMerge(data) {
+    const existingPlaylists = await DB.getPlaylists();
+    const byId = new Map(existingPlaylists.map((p) => [p.id, p]));
+    const byName = new Map(existingPlaylists.map((p) => [p.name.trim().toLowerCase(), p]));
+    const idMap = new Map(); // imported playlist id -> local playlist id
+    let order = existingPlaylists.length;
+
+    for (const p of data.playlists) {
+      if (byId.has(p.id)) {
+        idMap.set(p.id, p.id);
+      } else {
+        const sameName = byName.get((p.name || '').trim().toLowerCase());
+        if (sameName) {
+          idMap.set(p.id, sameName.id);
+        } else {
+          await DB.savePlaylist({ id: p.id, name: p.name, order: order++ });
+          idMap.set(p.id, p.id);
+        }
       }
-      toast('Backup restored');
+    }
+
+    const allSongs = await DB.getAllSongs();
+    const existingIds = new Set(allSongs.map((s) => s.id));
+    // (playlistId|title) signature to skip obvious duplicate titles
+    const titleSig = new Set(
+      allSongs.filter((s) => (s.title || '').trim()).map((s) => s.playlistId + '|' + s.title.trim().toLowerCase())
+    );
+    // next order per playlist
+    const maxOrder = {};
+    for (const s of allSongs) maxOrder[s.playlistId] = Math.max(maxOrder[s.playlistId] ?? -1, s.order ?? 0);
+
+    for (const s of data.songs) {
+      const targetPid = idMap.get(s.playlistId) || s.playlistId;
+      if (existingIds.has(s.id)) continue; // already have this exact song -> skip (dedupe)
+      const sig = (s.title || '').trim() ? targetPid + '|' + s.title.trim().toLowerCase() : null;
+      if (sig && titleSig.has(sig)) continue; // same title in same playlist -> skip duplicate
+
+      const rec = toSongRecord(s, targetPid);
+      rec.order = (maxOrder[targetPid] = (maxOrder[targetPid] ?? -1) + 1);
+      if (s.image) rec.image = await dataURLToBlob(s.image);
+      if (s.audio) rec.audio = await dataURLToBlob(s.audio);
+      await DB.saveSong(rec);
+      existingIds.add(s.id);
+      if (sig) titleSig.add(sig);
+    }
+
+    // Keep current active playlist if it still exists; otherwise adopt the imported one.
+    const current = await DB.getSetting('activePlaylistId', null);
+    const stillExists = (await DB.getPlaylists()).some((p) => p.id === current);
+    if (!stillExists && data.settings && data.settings.activePlaylistId) {
+      await DB.setSetting('activePlaylistId', idMap.get(data.settings.activePlaylistId) || data.settings.activePlaylistId);
+    }
+  }
+
+  async function runImport(mode) {
+    if (!pendingImport) return;
+    const data = pendingImport;
+    el.importModal.hidden = true;
+    try {
+      if (mode === 'replace') {
+        if (!confirm('פעולה זו תמחק את כל השירים והרשימות הקיימים במכשיר זה ותחליף אותם בקובץ. להמשיך?')) {
+          el.importModal.hidden = false;
+          return;
+        }
+        toast('מייבא...');
+        await doReplace(data);
+        toast('הספרייה שוחזרה');
+      } else {
+        toast('ממזג...');
+        await doMerge(data);
+        toast('המיזוג הושלם');
+      }
+      pendingImport = null;
       await refreshAdmin();
     } catch (err) {
-      toast('Import failed: ' + err.message);
+      toast('הייבוא נכשל: ' + err.message);
     }
   }
 
@@ -655,9 +792,13 @@
     el.addPlaylist.addEventListener('click', addPlaylist);
     el.addSong.addEventListener('click', () => openSongModal(null));
     el.changePin.addEventListener('click', openChangePin);
-    el.exportData.addEventListener('click', exportData);
+    el.exportFull.addEventListener('click', () => exportData(true));
+    el.exportMeta.addEventListener('click', () => exportData(false));
     el.importData.addEventListener('click', () => el.importFile.click());
-    el.importFile.addEventListener('change', (e) => importData(e.target.files[0]));
+    el.importFile.addEventListener('change', (e) => pickImportFile(e.target.files[0]));
+    el.importMerge.addEventListener('click', () => runImport('merge'));
+    el.importReplace.addEventListener('click', () => runImport('replace'));
+    el.importCancel.addEventListener('click', () => { el.importModal.hidden = true; pendingImport = null; el.importFile.value = ''; });
 
     // Song modal
     el.imgPreview.addEventListener('click', () => el.songImage.click());

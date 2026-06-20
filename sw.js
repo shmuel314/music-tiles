@@ -1,6 +1,6 @@
 // Service worker: caches the app shell so the player works fully offline.
 // Songs/images live in IndexedDB (handled by the app), not here.
-const CACHE = 'music-tiles-v4';
+const CACHE = 'music-tiles-v5';
 const SHELL = [
   './',
   './index.html',

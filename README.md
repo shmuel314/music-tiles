@@ -105,9 +105,16 @@ free, parent-protected lock. The exit is hidden and protected by a code/biometri
 - Songs and pictures are stored in the browser's **IndexedDB** on the device
   (can hold many songs — limited by free space). Small settings use local storage.
 - Data **survives app updates**.
-- Data does **not** automatically transfer to a new phone. Use
-  **Parent Area → Export backup** to save a single `.json` file (to Files / Google
-  Drive / iCloud / email). On the new phone, install the app and use **Import backup**.
+- Data does **not** automatically transfer to a new phone. In the Parent Area, the
+  **גיבוי ושיתוף** (Backup & Share) section creates a single `.json` file you can
+  send to the other parent (WhatsApp / email / Drive / iCloud):
+  - **ייצוא מלא (כולל קבצי שמע)** — full export with audio + images (larger file;
+    use this to truly share playable songs between phones).
+  - **ייצוא מטא־דאטה בלבד** — playlists, titles, order and tile images only,
+    without audio (small file).
+  - **ייבוא ספרייה** — on the other phone, import the file and choose **מיזוג**
+    (merge — the safe default, adds without deleting) or **החלפה** (replace — wipes
+    and replaces the current library). Duplicates are skipped automatically on merge.
 - Installing to the home screen makes the storage "persistent" so the system
   won't clear it — always install rather than just bookmarking.
 - **Back up after adding songs.** The backup file is the only copy off the device.
