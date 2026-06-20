@@ -26,8 +26,12 @@
   --border: #DDD6C4;
   --danger: var(--orange);
 
-  --tile-title-height: 2.1em;
+  --tile-title-height: 36px;
   --tile-radius: 22px;
+  --tile-gap: 20px;
+  --tile-pad: 20px;
+  --tile-cols: 2;
+  --tile-max: 420px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
@@ -62,7 +66,7 @@ body { touch-action: manipulation; }
   flex: 0 0 auto;
   display: flex;
   justify-content: flex-start;
-  padding: calc(10px + var(--safe-top)) 22px 0;
+  padding: calc(10px + var(--safe-top)) var(--tile-pad) 0;
 }
 
 .admin-entry-btn {
@@ -83,44 +87,42 @@ body { touch-action: manipulation; }
 .tiles {
   flex: 1 1 auto;
   min-height: 0;
+  --tile-cols: 2;
+  --tile-size: calc((100% - ((var(--tile-cols) - 1) * var(--tile-gap))) / var(--tile-cols));
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: auto;
-  align-items: start;
+  grid-template-columns: repeat(var(--tile-cols), var(--tile-size));
+  grid-auto-rows: var(--tile-size);
+  justify-content: center;
   align-content: start;
-  gap: 22px;
-  padding: 16px 22px 12px;
+  gap: var(--tile-gap);
+  padding: var(--tile-pad);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
 
-.tiles.few { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tiles.few { --tile-cols: 2; }
+
 .tiles.one {
-  grid-template-columns: minmax(0, 1fr);
-  max-width: min(100%, 420px);
-  width: 100%;
-  margin-inline: auto;
-  align-content: center;
+  --tile-cols: 1;
+  --tile-size: min(var(--tile-max), 100%);
 }
 
 .tile {
   position: relative;
   width: 100%;
-  aspect-ratio: 1 / 1;
+  height: 100%;
   border-radius: var(--tile-radius);
   background: var(--tile-bg);
   border: 5px solid transparent;
   overflow: hidden;
   cursor: pointer;
-  display: grid;
-  grid-template-rows: 1fr var(--tile-title-height);
   box-shadow: 0 2px 8px rgba(58, 124, 112, 0.08);
 }
 
-/* Image area fills remaining space above the fixed title strip */
+/* Media fills the square minus the fixed title strip */
 .tile-media {
-  position: relative;
-  min-height: 0;
+  position: absolute;
+  inset: 0 0 var(--tile-title-height) 0;
   overflow: hidden;
 }
 .tile-media img {
@@ -131,17 +133,21 @@ body { touch-action: manipulation; }
   pointer-events: none;
 }
 .tile-fallback {
-  position: absolute;
-  inset: 0;
+  width: 100%;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: clamp(32px, 12vw, 56px);
+  font-size: clamp(32px, 10vw, 56px);
   color: var(--sage);
 }
 
-/* Fixed one-line title strip; ellipsis only on text, never clips the image */
+/* Fixed one-line title strip pinned to the bottom */
 .tile-title {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   height: var(--tile-title-height);
   line-height: var(--tile-title-height);
   padding: 0 10px;
