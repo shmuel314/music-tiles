@@ -27,17 +27,11 @@
       <p id="empty-hint-admin" class="small">לחצו על «אזור הורים» למעלה כדי להוסיף שירים.</p>
     </div>
 
-    <!-- Small, unobtrusive playback bar -->
+    <!-- Minimal playback control -->
     <footer id="controls" class="controls" hidden>
-      <button id="btn-prev" class="ctrl" aria-label="שיר קודם">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
-      </button>
       <button id="btn-playpause" class="ctrl ctrl-main" aria-label="ניגון או השהיה">
         <svg id="icon-play" class="ctrl-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
         <svg id="icon-pause" class="ctrl-icon icon-hidden" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
-      </button>
-      <button id="btn-next" class="ctrl" aria-label="שיר הבא">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 6h2v12h-2zM6 6l8.5 6L6 18z"/></svg>
       </button>
     </footer>
   </main>
@@ -197,7 +191,7 @@
       <p>כיצד לייבא את הספרייה?</p>
       <div class="modal-actions modal-actions-stacked">
         <button id="import-merge" class="btn btn-primary">מיזוג עם הספרייה הקיימת (מומלץ)</button>
-        <button id="import-replace" class="btn">החלפת הספרייה הקיימת</button>
+        <button id="import-replace" class="btn btn-danger">החלפת הספרייה הקיימת</button>
         <button id="import-cancel" class="btn">ביטול</button>
       </div>
       <p class="small muted">מיזוג מוסיף שירים ורשימות חדשים מבלי למחוק את הקיימים. החלפה מוחקת את כל הספרייה הנוכחית ומחליפה אותה בקובץ.</p>

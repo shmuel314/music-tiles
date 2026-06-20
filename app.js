@@ -27,8 +27,6 @@
     tiles: $('tiles'),
     emptyHint: $('empty-hint'),
     controls: $('controls'),
-    btnPrev: $('btn-prev'),
-    btnNext: $('btn-next'),
     btnPlayPause: $('btn-playpause'),
     iconPlay: $('icon-play'),
     iconPause: $('icon-pause'),
@@ -102,6 +100,36 @@
     el.toast.hidden = false;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => (el.toast.hidden = true), 2200);
+  }
+
+  const buttonDefaults = new WeakMap();
+
+  function rememberButtonLabel(btn) {
+    if (!btn || buttonDefaults.has(btn)) return;
+    buttonDefaults.set(btn, btn.textContent.trim());
+  }
+
+  function setButtonLoading(btn, loading, loadingText) {
+    if (!btn) return;
+    rememberButtonLabel(btn);
+    if (loading) {
+      btn.classList.add('is-loading');
+      btn.disabled = true;
+      btn.setAttribute('aria-busy', 'true');
+      btn.replaceChildren();
+      const spinner = document.createElement('span');
+      spinner.className = 'btn-spinner';
+      spinner.setAttribute('aria-hidden', 'true');
+      btn.appendChild(spinner);
+      const label = document.createElement('span');
+      label.textContent = loadingText || buttonDefaults.get(btn) || '';
+      btn.appendChild(label);
+      return;
+    }
+    btn.classList.remove('is-loading');
+    btn.disabled = false;
+    btn.removeAttribute('aria-busy');
+    btn.textContent = buttonDefaults.get(btn) || '';
   }
 
   function titleFromFileName(name) {
@@ -261,17 +289,6 @@
       state.objectUrls.delete(lastAudioUrl);
     }
     lastAudioUrl = audio.src && audio.src.startsWith('blob:') ? audio.src : null;
-  }
-
-  function currentIndex() {
-    return state.songs.findIndex((s) => s.id === state.currentSongId);
-  }
-  function playByOffset(offset) {
-    if (state.songs.length === 0) return;
-    let idx = currentIndex();
-    if (idx === -1) idx = 0;
-    else idx = (idx + offset + state.songs.length) % state.songs.length;
-    playSong(state.songs[idx].id);
   }
 
   function togglePlayPause() {
@@ -618,9 +635,16 @@
   }
 
   async function saveYoutubeApiKey() {
-    const key = el.youtubeApiKey.value.trim();
-    await DB.setSetting('youtubeApiKey', key);
-    toast(key ? 'מפתח YouTube נשמר' : 'מפתח YouTube נמחק');
+    setButtonLoading(el.youtubeApiSave, true, 'שומר...');
+    try {
+      const key = el.youtubeApiKey.value.trim();
+      await DB.setSetting('youtubeApiKey', key);
+      toast(key ? 'מפתח YouTube נשמר' : 'מפתח YouTube נמחק');
+    } catch {
+      toast('שמירת המפתח נכשלה');
+    } finally {
+      setButtonLoading(el.youtubeApiSave, false);
+    }
   }
 
   // ---- Song add/edit modal ----
@@ -709,16 +733,20 @@
   }
 
   function setYoutubeImportLoading(loading, text) {
-    el.youtubeImport.disabled = loading;
-    if (!text) {
+    if (loading) {
+      setButtonLoading(el.youtubeImport, true, text || 'מייבא תמונה...');
+    } else {
+      setButtonLoading(el.youtubeImport, false);
+    }
+    if (loading && text) {
+      el.youtubeStatus.hidden = false;
+      el.youtubeStatusText.textContent = text;
+      el.youtubeSpinner.hidden = false;
+    } else {
       el.youtubeStatus.hidden = true;
       el.youtubeSpinner.hidden = true;
       el.youtubeStatusText.textContent = '';
-      return;
     }
-    el.youtubeStatus.hidden = false;
-    el.youtubeStatusText.textContent = text;
-    el.youtubeSpinner.hidden = !loading;
   }
 
   function readImageDimensionsFromBlob(blob) {
@@ -927,25 +955,30 @@
       return;
     }
 
-    toast(`מייבא ${audioFiles.length} שירים...`);
+    setButtonLoading(el.bulkImportSongs, true, 'מייבא שירים...');
     const existing = await DB.getSongsByPlaylist(playlistId);
     let order = existing.length;
     let imported = 0;
 
-    for (const file of audioFiles) {
-      await DB.saveSong({
-        id: DB.uid(),
-        title: titleFromFileName(file.name),
-        playlistId,
-        order: order++,
-        sourceType: 'LOCAL',
-        audio: file
-      });
-      imported++;
+    try {
+      for (const file of audioFiles) {
+        await DB.saveSong({
+          id: DB.uid(),
+          title: titleFromFileName(file.name),
+          playlistId,
+          order: order++,
+          sourceType: 'LOCAL',
+          audio: file
+        });
+        imported++;
+      }
+      await renderPlaylistSongList();
+      toast(imported === 1 ? 'שיר אחד יובא' : `${imported} שירים יובאו`);
+    } catch {
+      toast('ייבוא השירים נכשל');
+    } finally {
+      setButtonLoading(el.bulkImportSongs, false);
     }
-
-    await renderPlaylistSongList();
-    toast(imported === 1 ? 'שיר אחד יובא' : `${imported} שירים יובאו`);
   }
 
   async function saveSongDraft() {
@@ -953,31 +986,38 @@
     if (!playlistId) { toast('יש לבחור רשימת השמעה'); return; }
     if (!draft.id && !draft.audioBlob) { toast('יש לבחור קובץ שמע'); return; }
 
-    let song;
-    if (draft.id) {
-      const all = await DB.getAllSongs();
-      song = all.find((s) => s.id === draft.id);
-    }
-    if (!song) {
-      const existing = await DB.getSongsByPlaylist(playlistId);
-      song = { id: DB.uid(), order: existing.length, sourceType: 'LOCAL' };
-    }
-    song.title = el.songTitle.value.trim();
-    song.playlistId = playlistId;
-    if (draft.audioBlob) song.audio = draft.audioBlob;
-    if (draft.imageBlob) song.image = draft.imageBlob;
+    setButtonLoading(el.songSave, true, 'שומר...');
+    try {
+      let song;
+      if (draft.id) {
+        const all = await DB.getAllSongs();
+        song = all.find((s) => s.id === draft.id);
+      }
+      if (!song) {
+        const existing = await DB.getSongsByPlaylist(playlistId);
+        song = { id: DB.uid(), order: existing.length, sourceType: 'LOCAL' };
+      }
+      song.title = el.songTitle.value.trim();
+      song.playlistId = playlistId;
+      if (draft.audioBlob) song.audio = draft.audioBlob;
+      if (draft.imageBlob) song.image = draft.imageBlob;
 
-    await DB.saveSong(song);
-    el.songModal.hidden = true;
-    toast('נשמר');
-    await renderPlaylistSongList();
+      await DB.saveSong(song);
+      el.songModal.hidden = true;
+      toast('נשמר');
+      await renderPlaylistSongList();
+    } catch {
+      toast('השמירה נכשלה');
+    } finally {
+      setButtonLoading(el.songSave, false);
+    }
   }
 
   // ---- Backup / share ----
   // Export format (one self-contained JSON file that can be sent to the other parent):
   //   { app, version, exportedAt, includesAudio, settings:{activePlaylistId, volumeCap, offlineMode},
   //     playlists:[...], songs:[{ id, title, playlistId, order, sourceType, spotifyUri, image, audio }] }
-  async function exportData(includeAudio) {
+  async function exportData(includeAudio, btn) {
     const songsRaw = await DB.getAllSongs();
 
     // Warn about large full exports (audio dominates the size).
@@ -994,48 +1034,57 @@
       }
     }
 
-    toast('מכין קובץ...');
-    const playlists = (await DB.getPlaylists()).map((p) => ({ id: p.id, name: p.name, order: p.order ?? 0 }));
-    const songs = [];
-    for (const s of songsRaw) {
-      songs.push({
-        id: s.id,
-        title: s.title || '',
-        playlistId: s.playlistId,
-        order: s.order ?? 0,
-        sourceType: s.sourceType || 'LOCAL',
-        spotifyUri: s.spotifyUri || null,
-        image: s.image ? await blobToDataURL(s.image) : null,
-        audio: includeAudio && s.audio ? await blobToDataURL(s.audio) : null
-      });
-    }
-    const payload = {
-      app: 'music-tiles',
-      version: 2,
-      exportedAt: new Date().toISOString(),
-      includesAudio: !!includeAudio,
-      settings: {
-        activePlaylistId: await DB.getSetting('activePlaylistId', null),
-        volumeCap: state.volumeCap,
-        offlineMode: await DB.getSetting('offlineMode', true),
-        youtubeApiKey: await DB.getSetting('youtubeApiKey', ''),
-        showAdminButton: await DB.getSetting('showAdminButton', false)
-      },
-      playlists,
-      songs
-    };
+    const otherBtn = includeAudio ? el.exportMeta : el.exportFull;
+    setButtonLoading(btn, true, 'מייצא...');
+    otherBtn.disabled = true;
+    try {
+      const playlists = (await DB.getPlaylists()).map((p) => ({ id: p.id, name: p.name, order: p.order ?? 0 }));
+      const songs = [];
+      for (const s of songsRaw) {
+        songs.push({
+          id: s.id,
+          title: s.title || '',
+          playlistId: s.playlistId,
+          order: s.order ?? 0,
+          sourceType: s.sourceType || 'LOCAL',
+          spotifyUri: s.spotifyUri || null,
+          image: s.image ? await blobToDataURL(s.image) : null,
+          audio: includeAudio && s.audio ? await blobToDataURL(s.audio) : null
+        });
+      }
+      const payload = {
+        app: 'music-tiles',
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        includesAudio: !!includeAudio,
+        settings: {
+          activePlaylistId: await DB.getSetting('activePlaylistId', null),
+          volumeCap: state.volumeCap,
+          offlineMode: await DB.getSetting('offlineMode', true),
+          youtubeApiKey: await DB.getSetting('youtubeApiKey', ''),
+          showAdminButton: await DB.getSetting('showAdminButton', false)
+        },
+        playlists,
+        songs
+      };
 
-    const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const kind = includeAudio ? 'full' : 'meta';
-    a.download = `arhazei-muzika-${kind}-${new Date().toISOString().slice(0, 10)}.json`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 8000);
-    toast(includeAudio ? 'הייצוא המלא נוצר' : 'ייצוא המטא־דאטה נוצר');
+      const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const kind = includeAudio ? 'full' : 'meta';
+      a.download = `arhazei-muzika-${kind}-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 8000);
+      toast(includeAudio ? 'הייצוא המלא נוצר' : 'ייצוא המטא־דאטה נוצר');
+    } catch {
+      toast('הייצוא נכשל');
+    } finally {
+      setButtonLoading(btn, false);
+      otherBtn.disabled = false;
+    }
   }
 
   // Holds a validated import payload between picking the file and choosing merge/replace.
@@ -1152,28 +1201,39 @@
     }
   }
 
-  async function runImport(mode) {
+  async function runImport(mode, btn) {
     if (!pendingImport) return;
     const data = pendingImport;
+    const otherBtn = mode === 'merge' ? el.importReplace : el.importMerge;
+    const loadingText = mode === 'merge' ? 'ממזג...' : 'מייבא...';
+
+    if (mode === 'replace') {
+      if (!confirm('פעולה זו תמחק את כל השירים והרשימות הקיימים במכשיר זה ותחליף אותם בקובץ. להמשיך?')) {
+        return;
+      }
+    }
+
     el.importModal.hidden = true;
+    setButtonLoading(btn, true, loadingText);
+    otherBtn.disabled = true;
+    el.importCancel.disabled = true;
     try {
       if (mode === 'replace') {
-        if (!confirm('פעולה זו תמחק את כל השירים והרשימות הקיימים במכשיר זה ותחליף אותם בקובץ. להמשיך?')) {
-          el.importModal.hidden = false;
-          return;
-        }
-        toast('מייבא...');
         await doReplace(data);
         toast('הספרייה שוחזרה');
       } else {
-        toast('ממזג...');
         await doMerge(data);
         toast('המיזוג הושלם');
       }
       pendingImport = null;
       await refreshAdmin();
     } catch (err) {
+      el.importModal.hidden = false;
       toast('הייבוא נכשל: ' + err.message);
+    } finally {
+      setButtonLoading(btn, false);
+      otherBtn.disabled = false;
+      el.importCancel.disabled = false;
     }
   }
 
@@ -1243,8 +1303,6 @@
     bindAdminEntry();
 
     el.btnPlayPause.addEventListener('click', togglePlayPause);
-    el.btnNext.addEventListener('click', () => playByOffset(1));
-    el.btnPrev.addEventListener('click', () => playByOffset(-1));
 
     audio.addEventListener('play', syncPlaybackState);
     audio.addEventListener('pause', () => {
@@ -1290,12 +1348,12 @@
     });
     el.changePin.addEventListener('click', openChangePin);
     el.youtubeApiSave.addEventListener('click', saveYoutubeApiKey);
-    el.exportFull.addEventListener('click', () => exportData(true));
-    el.exportMeta.addEventListener('click', () => exportData(false));
+    el.exportFull.addEventListener('click', () => exportData(true, el.exportFull));
+    el.exportMeta.addEventListener('click', () => exportData(false, el.exportMeta));
     el.importData.addEventListener('click', () => el.importFile.click());
     el.importFile.addEventListener('change', (e) => pickImportFile(e.target.files[0]));
-    el.importMerge.addEventListener('click', () => runImport('merge'));
-    el.importReplace.addEventListener('click', () => runImport('replace'));
+    el.importMerge.addEventListener('click', () => runImport('merge', el.importMerge));
+    el.importReplace.addEventListener('click', () => runImport('replace', el.importReplace));
     el.importCancel.addEventListener('click', () => { el.importModal.hidden = true; pendingImport = null; el.importFile.value = ''; });
 
     // Song modal
