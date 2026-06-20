@@ -104,11 +104,15 @@
     state.objectUrls.clear();
   }
   let toastTimer = null;
-  function toast(msg) {
+  function toast(msg, opts) {
     el.toast.textContent = msg;
+    el.toast.classList.toggle('success', !!(opts && opts.success));
     el.toast.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => (el.toast.hidden = true), 2200);
+    toastTimer = setTimeout(() => {
+      el.toast.hidden = true;
+      el.toast.classList.remove('success');
+    }, 2200);
   }
 
   const buttonDefaults = new WeakMap();
@@ -485,7 +489,7 @@
         await DB.setSetting('pin', pin.entered);
         el.pinScreen.hidden = true;
         el.adminScreen.hidden = false;
-        toast('הקוד שונה');
+        toast('הקוד שונה', { success: true });
       } else {
         el.pinError.textContent = 'הקודים אינם תואמים';
         el.pinError.hidden = false;
@@ -520,7 +524,7 @@
     await DB.setSetting('activePlaylistId', id);
     state.activePlaylistId = id;
     renderPlaylistList();
-    toast('הרשימה הוגדרה כפעילה');
+    toast('הרשימה הוגדרה כפעילה', { success: true });
   }
 
   function getAdminPlaylistId() {
@@ -787,7 +791,7 @@
       await DB.saveSong(copy);
       el.copySongModal.hidden = true;
       pendingCopySong = null;
-      toast(`השיר הועתק ל«${targetName}»`);
+      toast(`השיר הועתק ל«${targetName}»`, { success: true });
     } catch {
       toast('ההעתקה נכשלה');
     } finally {
@@ -816,7 +820,7 @@
     try {
       const key = el.youtubeApiKey.value.trim();
       await DB.setSetting('youtubeApiKey', key);
-      toast(key ? 'מפתח YouTube נשמר' : 'מפתח YouTube נמחק');
+      toast(key ? 'מפתח YouTube נשמר' : 'מפתח YouTube נמחק', { success: true });
     } catch {
       toast('שמירת המפתח נכשלה');
     } finally {
@@ -1090,7 +1094,7 @@
       setImagePreviewBlob(blob);
       el.youtubeCancel.hidden = false;
       setYoutubeImportLoading(false, '');
-      toast('התמונה יובאה בהצלחה — לחצו «שמירה» לשמירה');
+      toast('התמונה יובאה בהצלחה — לחצו «שמירה» לשמירה', { success: true });
     } catch (err) {
       if (draft.imagePreviewRevert) applyImagePreview(draft.imagePreviewRevert);
       draft.imageBlob = revertDraft.imageBlob;
@@ -1150,7 +1154,7 @@
         imported++;
       }
       await renderPlaylistSongList();
-      toast(imported === 1 ? 'שיר אחד יובא' : `${imported} שירים יובאו`);
+      toast(imported === 1 ? 'שיר אחד יובא' : `${imported} שירים יובאו`, { success: true });
     } catch {
       toast('ייבוא השירים נכשל');
     } finally {
@@ -1181,7 +1185,7 @@
 
       await DB.saveSong(song);
       el.songModal.hidden = true;
-      toast('נשמר');
+      toast('נשמר', { success: true });
       await renderPlaylistSongList();
     } catch {
       toast('השמירה נכשלה');
@@ -1257,7 +1261,7 @@
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 8000);
-      toast(includeAudio ? 'הייצוא המלא נוצר' : 'ייצוא המטא־דאטה נוצר');
+      toast(includeAudio ? 'הייצוא המלא נוצר' : 'ייצוא המטא־דאטה נוצר', { success: true });
     } catch {
       toast('הייצוא נכשל');
     } finally {
@@ -1403,10 +1407,10 @@
     try {
       if (mode === 'replace') {
         await doReplace(data);
-        toast('הספרייה שוחזרה');
+        toast('הספרייה שוחזרה', { success: true });
       } else {
         await doMerge(data);
-        toast('המיזוג הושלם');
+        toast('המיזוג הושלם', { success: true });
       }
       pendingImport = null;
       await refreshAdmin();
