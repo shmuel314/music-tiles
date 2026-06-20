@@ -1,36 +1,34 @@
 :root {
   /* ---- User palette ---- */
-  --mint-pastel: #ADDCC8;
-  --sage-pastel: #DBECC2;
-  --soft-cream: #FFF7D2;
+  --soft-cream: #FFFBEF;
   --peach: #FED2B5;
   --soft-pink: #F7A7A6;
   --rose-pink: #F48A94;
 
   /* ---- Design system (mapped from palette) ---- */
   --bg: var(--soft-cream);
-  --bg-soft: var(--sage-pastel);
+  --bg-soft: var(--peach);
   --surface: #FFFFFF;
-  --surface-muted: var(--sage-pastel);
-  --tile-bg: var(--mint-pastel);
+  --surface-muted: var(--peach);
+  --tile-bg: var(--peach);
 
   --primary: var(--rose-pink);
   --primary-strong: #E06B78;
   --on-primary: #FFFFFF;
 
-  --secondary: var(--mint-pastel);
-  --secondary-strong: #95C9B4;
+  --secondary: var(--peach);
+  --secondary-strong: #E8B896;
 
-  --playing: var(--peach);
-  --playing-glow: rgba(254, 210, 181, 0.55);
+  --playing: var(--rose-pink);
+  --playing-glow: rgba(244, 138, 148, 0.35);
 
   --text: #454240;
   --text-muted: #726C68;
 
-  --border: #D4E4C0;
-  --border-strong: #BFD4A8;
+  --border: #F5C9A8;
+  --border-strong: #EDBA98;
 
-  --disabled-bg: #E6EDD8;
+  --disabled-bg: #FEE8D6;
   --disabled-text: #A8A098;
 
   --danger: var(--rose-pink);
@@ -87,7 +85,7 @@ body { touch-action: manipulation; }
 .admin-entry-btn {
   background: var(--surface);
   color: var(--text);
-  border: 2px solid var(--mint-pastel);
+  border: 2px solid var(--peach);
   border-radius: 999px;
   padding: 7px 14px;
   font-size: 14px;
@@ -226,7 +224,7 @@ body { touch-action: manipulation; }
 
 .ctrl {
   background: var(--surface);
-  border: 2px solid var(--mint-pastel);
+  border: 2px solid var(--peach);
   border-radius: 50%;
   width: 48px;
   height: 48px;
@@ -424,7 +422,7 @@ body { touch-action: manipulation; }
 
 .icon-btn {
   background: var(--surface);
-  border: 2px solid var(--mint-pastel);
+  border: 2px solid var(--peach);
   color: var(--text);
   width: 36px; height: 36px;
   border-radius: 9px;
@@ -463,7 +461,7 @@ body { touch-action: manipulation; }
   gap: 8px;
   background: var(--surface);
   color: var(--text);
-  border: 2px solid var(--mint-pastel);
+  border: 2px solid var(--peach);
   border-radius: 10px;
   padding: 10px 16px;
   font-size: 15px;
@@ -473,7 +471,7 @@ body { touch-action: manipulation; }
   text-align: center;
 }
 .btn:active:not(:disabled):not(.is-loading) {
-  background: var(--sage-pastel);
+  background: var(--peach);
   transform: scale(0.98);
 }
 .btn-primary {
@@ -501,9 +499,9 @@ body { touch-action: manipulation; }
   color: #FFF5F5;
 }
 .btn.is-loading {
-  background: var(--sage-pastel);
+  background: var(--peach);
   color: var(--text);
-  border-color: var(--mint-pastel);
+  border-color: var(--border-strong);
 }
 .btn-primary.is-loading {
   background: var(--primary);
