@@ -1,0 +1,297 @@
+:root {
+  --bg: #1b2330;
+  --bg-soft: #232d3d;
+  --card: #2b3749;
+  --text: #e8edf4;
+  --muted: #9aa7ba;
+  --accent: #8fd3c8;
+  --accent-strong: #6fc2b4;
+  --danger: #d98a8a;
+  --tile-radius: 22px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+/* The `hidden` attribute must always win over display rules below (e.g. .overlay) */
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body { touch-action: manipulation; }
+
+/* Hidden admin trigger in the top-left corner */
+#admin-trigger {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 84px;
+  height: 84px;
+  z-index: 50;
+  background: transparent;
+}
+
+/* ---------- CHILD SCREEN ---------- */
+#child-screen {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.tiles {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 22px;
+  padding: 22px;
+  padding-bottom: 12px;
+  overflow-y: auto;
+  align-content: start;
+}
+
+/* With very few songs, make tiles larger and single-friendly */
+.tiles.few { grid-template-columns: repeat(2, 1fr); }
+.tiles.one { grid-template-columns: 1fr; place-content: center; }
+
+.tile {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--tile-radius);
+  background: var(--bg-soft) center/cover no-repeat;
+  border: 5px solid transparent;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+
+.tile .tile-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 56px;
+  color: var(--muted);
+}
+
+/* Static "now playing" indicator: a calm steady border + small dot. No animation. */
+.tile.playing { border-color: var(--accent); }
+.tile.playing::after {
+  content: "";
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px rgba(143, 211, 200, 0.25);
+}
+
+.empty-hint {
+  margin: auto;
+  text-align: center;
+  color: var(--muted);
+  padding: 24px;
+}
+.empty-hint .small { font-size: 14px; opacity: 0.7; }
+
+/* ---------- PLAYBACK CONTROLS (small, unobtrusive) ---------- */
+.controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 28px;
+  padding: 10px 0 calc(10px + var(--safe-bottom));
+  background: var(--bg);
+}
+
+.ctrl {
+  background: var(--bg-soft);
+  border: none;
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text);
+}
+.ctrl svg { width: 24px; height: 24px; fill: currentColor; }
+.ctrl-main { width: 60px; height: 60px; background: var(--accent); color: #113; }
+.ctrl-main svg { width: 30px; height: 30px; }
+
+/* ---------- OVERLAYS ---------- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+
+/* PIN */
+#pin-screen { align-items: center; justify-content: center; }
+.pin-box { width: min(360px, 90vw); text-align: center; }
+.pin-box h2 { font-weight: 600; margin-bottom: 18px; }
+.pin-dots { display: flex; gap: 14px; justify-content: center; height: 18px; margin-bottom: 26px; }
+.pin-dots span {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid var(--muted);
+}
+.pin-dots span.filled { background: var(--accent); border-color: var(--accent); }
+.pin-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.pin-pad button {
+  font-size: 26px;
+  padding: 18px 0;
+  border-radius: 16px;
+  border: none;
+  background: var(--bg-soft);
+  color: var(--text);
+  cursor: pointer;
+}
+.pin-pad .pin-secondary { font-size: 16px; background: transparent; color: var(--muted); }
+.pin-error { color: var(--danger); margin-top: 16px; }
+
+/* ---------- ADMIN ---------- */
+.admin { overflow-y: auto; }
+.admin-header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px;
+  background: var(--bg);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  z-index: 2;
+}
+.admin-header h1 { font-size: 20px; margin: 0; }
+.admin-body { padding: 16px; display: flex; flex-direction: column; gap: 16px; padding-bottom: 60px; }
+
+.card {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 16px;
+}
+.card h3 { margin: 0 0 12px; font-size: 16px; }
+.card-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.card-row h3 { margin: 0; }
+
+.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-soft);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.list .thumb {
+  width: 46px; height: 46px; border-radius: 8px;
+  background: var(--bg) center/cover no-repeat;
+  flex-shrink: 0;
+}
+.list .grow { flex: 1; min-width: 0; }
+.list .name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list .row-actions { display: flex; gap: 6px; }
+
+.icon-btn {
+  background: var(--bg);
+  border: none;
+  color: var(--text);
+  width: 36px; height: 36px;
+  border-radius: 9px;
+  font-size: 16px;
+  cursor: pointer;
+}
+.icon-btn.danger { color: var(--danger); }
+.icon-btn:disabled { opacity: 0.3; }
+
+.active-pill { font-size: 11px; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 2px 8px; }
+
+/* Buttons */
+.btn {
+  background: var(--bg-soft);
+  color: var(--text);
+  border: none;
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 15px;
+  cursor: pointer;
+}
+.btn-primary { background: var(--accent); color: #113; font-weight: 600; }
+.btn-group { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
+
+select, input[type="text"] {
+  width: 100%;
+  background: var(--bg-soft);
+  color: var(--text);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 16px;
+}
+input[type="range"] { width: calc(100% - 56px); vertical-align: middle; }
+#volume-cap-label { margin-left: 10px; color: var(--muted); }
+
+.small { font-size: 13px; }
+.muted { color: var(--muted); }
+
+/* ---------- MODAL ---------- */
+.modal { align-items: center; justify-content: center; background: rgba(8,12,18,0.7); }
+.modal-box {
+  width: min(440px, 92vw);
+  max-height: 92vh;
+  overflow-y: auto;
+  background: var(--card);
+  border-radius: 18px;
+  padding: 20px;
+}
+.modal-box h2 { margin-top: 0; }
+.field { display: block; margin-bottom: 16px; }
+.field > span { display: block; font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+.img-preview {
+  height: 150px;
+  border-radius: 12px;
+  background: var(--bg-soft) center/cover no-repeat;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--muted); text-align: center; cursor: pointer;
+}
+.modal-actions { display: flex; justify-content: flex-end; gap: 12px; }
+
+/* ---------- TOAST ---------- */
+.toast {
+  position: fixed;
+  bottom: calc(24px + var(--safe-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  background: #000a;
+  color: #fff;
+  padding: 12px 18px;
+  border-radius: 10px;
+  z-index: 200;
+  font-size: 14px;
+}

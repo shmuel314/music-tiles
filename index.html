@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#1b2330" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Music" />
+  <link rel="apple-touch-icon" href="./icon.svg" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="stylesheet" href="./styles.css" />
+  <title>Music</title>
+</head>
+<body>
+  <!-- Hidden admin trigger: long-press this top-left corner ~3s -->
+  <div id="admin-trigger" aria-hidden="true"></div>
+
+  <!-- CHILD SCREEN -->
+  <main id="child-screen">
+    <div id="tiles" class="tiles"></div>
+    <div id="empty-hint" class="empty-hint" hidden>
+      <p>No songs yet.</p>
+      <p class="small">Press &amp; hold the top-left corner to open the parent area.</p>
+    </div>
+
+    <!-- Small, unobtrusive playback bar -->
+    <footer id="controls" class="controls" hidden>
+      <button id="btn-prev" class="ctrl" aria-label="Previous">
+        <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+      </button>
+      <button id="btn-playpause" class="ctrl ctrl-main" aria-label="Play or pause">
+        <svg id="icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        <svg id="icon-pause" viewBox="0 0 24 24" hidden><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
+      </button>
+      <button id="btn-next" class="ctrl" aria-label="Next">
+        <svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2zM6 6l8.5 6L6 18z"/></svg>
+      </button>
+    </footer>
+  </main>
+
+  <!-- PIN SCREEN -->
+  <section id="pin-screen" class="overlay" hidden>
+    <div class="pin-box">
+      <h2 id="pin-title">Enter PIN</h2>
+      <div id="pin-dots" class="pin-dots"></div>
+      <div class="pin-pad">
+        <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button>
+        <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button>
+        <button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button>
+        <button data-key="cancel" class="pin-secondary">Cancel</button>
+        <button data-key="0">0</button>
+        <button data-key="back" class="pin-secondary">&#9003;</button>
+      </div>
+      <p id="pin-error" class="pin-error" hidden>Wrong PIN</p>
+    </div>
+  </section>
+
+  <!-- ADMIN SCREEN -->
+  <section id="admin-screen" class="overlay admin" hidden>
+    <header class="admin-header">
+      <h1>Parent Area</h1>
+      <button id="admin-done" class="btn btn-primary">Done</button>
+    </header>
+
+    <div class="admin-body">
+      <div class="card">
+        <h3>Active playlist (what the child sees)</h3>
+        <select id="active-playlist-select"></select>
+      </div>
+
+      <div class="card">
+        <h3>Maximum volume</h3>
+        <input id="volume-cap" type="range" min="0" max="100" step="5" />
+        <span id="volume-cap-label">80%</span>
+      </div>
+
+      <div class="card">
+        <div class="card-row">
+          <h3>Playlists</h3>
+          <button id="add-playlist" class="btn">+ New</button>
+        </div>
+        <ul id="playlist-list" class="list"></ul>
+      </div>
+
+      <div class="card">
+        <div class="card-row">
+          <h3 id="songs-title">Songs</h3>
+          <button id="add-song" class="btn btn-primary">+ Add song</button>
+        </div>
+        <ul id="song-list" class="list"></ul>
+      </div>
+
+      <div class="card">
+        <h3>Security &amp; backup</h3>
+        <div class="btn-group">
+          <button id="change-pin" class="btn">Change PIN</button>
+          <button id="export-data" class="btn">Export backup</button>
+          <button id="import-data" class="btn">Import backup</button>
+        </div>
+        <input id="import-file" type="file" accept="application/json" hidden />
+        <p class="small muted">Back up regularly. Songs live only on this device; a backup is the only way to move them to a new phone.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ADD / EDIT SONG MODAL -->
+  <section id="song-modal" class="overlay modal" hidden>
+    <div class="modal-box">
+      <h2 id="song-modal-title">Add song</h2>
+
+      <label class="field">
+        <span>Picture (tile image)</span>
+        <div id="img-preview" class="img-preview">Tap to choose a picture</div>
+        <input id="song-image" type="file" accept="image/*" hidden />
+      </label>
+
+      <label class="field">
+        <span>Audio file</span>
+        <button type="button" id="pick-audio" class="btn">Choose audio file</button>
+        <span id="audio-name" class="small muted">No file selected</span>
+        <input id="song-audio" type="file" accept="audio/*" hidden />
+      </label>
+
+      <label class="field">
+        <span>Name (optional, for parent only)</span>
+        <input id="song-title" type="text" placeholder="e.g. Wheels on the Bus" />
+      </label>
+
+      <label class="field">
+        <span>Playlist</span>
+        <select id="song-playlist"></select>
+      </label>
+
+      <div class="modal-actions">
+        <button id="song-cancel" class="btn">Cancel</button>
+        <button id="song-save" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="./db.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

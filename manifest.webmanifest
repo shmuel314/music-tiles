@@ -1,0 +1,20 @@
+{
+  "name": "Music Tiles",
+  "short_name": "Music",
+  "description": "A simple, safe, offline music player with big picture tiles for children.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#1b2330",
+  "theme_color": "#1b2330",
+  "lang": "en",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
