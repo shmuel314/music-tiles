@@ -275,7 +275,10 @@
 
       const title = document.createElement('div');
       title.className = 'tile-title';
-      title.textContent = song.title || '';
+      const titleText = document.createElement('span');
+      titleText.className = 'tile-title-text';
+      titleText.textContent = song.title || '';
+      title.appendChild(titleText);
       tile.appendChild(title);
 
       tile.addEventListener('click', () => onTileTap(song.id));
