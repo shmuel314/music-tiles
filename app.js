@@ -69,6 +69,11 @@
     songPlaylist: $('song-playlist'),
     songCancel: $('song-cancel'),
     songSave: $('song-save'),
+    youtubeUrl: $('youtube-url'),
+    youtubeImport: $('youtube-import'),
+    youtubePreviewActions: $('youtube-preview-actions'),
+    youtubeAccept: $('youtube-accept'),
+    youtubeCancel: $('youtube-cancel'),
     toast: $('toast')
   };
 
@@ -511,7 +516,136 @@
   }
 
   // ---- Song add/edit modal ----
-  const draft = { id: null, imageBlob: null, audioBlob: null, keepImage: false, keepAudio: false };
+  const draft = {
+    id: null,
+    imageBlob: null,
+    audioBlob: null,
+    keepImage: false,
+    keepAudio: false,
+    pendingYtBlob: null,
+    imagePreviewRevert: null
+  };
+
+  const YT_THUMBNAIL_QUALITIES = [
+    { name: 'maxresdefault', minWidth: 200 },
+    { name: 'sddefault', minWidth: 640 },
+    { name: 'hqdefault', minWidth: 480 },
+    { name: 'mqdefault', minWidth: 320 },
+    { name: 'default', minWidth: 120 }
+  ];
+
+  function extractYouTubeVideoId(url) {
+    const s = (url || '').trim();
+    if (!s) return null;
+    let m = s.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
+    if (m) return m[1];
+    m = s.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+    if (m) return m[1];
+    m = s.match(/\/(?:embed|shorts|live|v)\/([a-zA-Z0-9_-]{11})/);
+    if (m) return m[1];
+    if (/^[a-zA-Z0-9_-]{11}$/.test(s)) return s;
+    return null;
+  }
+
+  function readImageDimensionsFromBlob(blob) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(blob);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        resolve({ width: img.naturalWidth, height: img.naturalHeight });
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('image'));
+      };
+      img.src = url;
+    });
+  }
+
+  function blobFromImageElement(img) {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error('canvas'));
+      }, 'image/jpeg', 0.92);
+    });
+  }
+
+  function loadRemoteImageAsBlob(imageUrl) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = async () => {
+        try {
+          const blob = await blobFromImageElement(img);
+          resolve({ blob, width: img.naturalWidth, height: img.naturalHeight });
+        } catch (err) {
+          reject(err);
+        }
+      };
+      img.onerror = () => reject(new Error('load'));
+      img.src = imageUrl;
+    });
+  }
+
+  async function downloadImageAsBlob(imageUrl) {
+    const res = await fetch(imageUrl);
+    if (!res.ok) throw new Error('http');
+    const blob = await res.blob();
+    if (!blob.type.startsWith('image/')) throw new Error('type');
+    const dims = await readImageDimensionsFromBlob(blob);
+    return { blob, width: dims.width, height: dims.height };
+  }
+
+  async function fetchYouTubeThumbnailBlob(videoId) {
+    let lastError = null;
+    for (const quality of YT_THUMBNAIL_QUALITIES) {
+      const url = `https://i.ytimg.com/vi/${videoId}/${quality.name}.jpg`;
+      try {
+        let result;
+        try {
+          result = await downloadImageAsBlob(url);
+        } catch {
+          result = await loadRemoteImageAsBlob(url);
+        }
+        if (result.width >= quality.minWidth) {
+          return { blob: result.blob, quality: quality.name };
+        }
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    throw lastError || new Error('thumbnail');
+  }
+
+  function snapshotImagePreview() {
+    return {
+      backgroundImage: el.imgPreview.style.backgroundImage,
+      text: el.imgPreview.textContent
+    };
+  }
+
+  function applyImagePreview(snapshot) {
+    el.imgPreview.style.backgroundImage = snapshot.backgroundImage || '';
+    el.imgPreview.textContent = snapshot.text || '';
+  }
+
+  function setImagePreviewBlob(blob) {
+    const url = objectUrl(blob);
+    el.imgPreview.style.backgroundImage = `url(${url})`;
+    el.imgPreview.textContent = '';
+  }
+
+  function hideYoutubePreviewActions() {
+    el.youtubePreviewActions.hidden = true;
+    draft.pendingYtBlob = null;
+    draft.imagePreviewRevert = null;
+  }
 
   function openSongModal(song) {
     draft.id = song ? song.id : null;
@@ -519,23 +653,67 @@
     draft.audioBlob = null;
     draft.keepImage = !!(song && song.image);
     draft.keepAudio = !!(song && song.audio);
+    hideYoutubePreviewActions();
 
     el.songModalTitle.textContent = song ? 'עריכת שיר' : 'הוספת שיר';
     el.songTitle.value = song ? (song.title || '') : '';
     el.songPlaylist.value = song ? song.playlistId : el.activePlaylistSelect.value;
     el.audioName.textContent = draft.keepAudio ? 'הקובץ הקיים נשמר' : 'לא נבחר קובץ';
-    el.imgPreview.style.backgroundImage = song && song.image ? `url(${objectUrl(song.image)})` : '';
-    el.imgPreview.textContent = song && song.image ? '' : 'בחירת תמונה';
+    el.youtubeUrl.value = '';
+    el.youtubeImport.disabled = false;
+    if (song && song.image) {
+      setImagePreviewBlob(song.image);
+    } else {
+      applyImagePreview({ backgroundImage: '', text: 'בחירת תמונה' });
+    }
     el.songModal.hidden = false;
   }
 
   function onImagePicked(file) {
     if (!file) return;
+    hideYoutubePreviewActions();
     draft.imageBlob = file;
     draft.keepImage = false;
-    const url = objectUrl(file);
-    el.imgPreview.style.backgroundImage = `url(${url})`;
-    el.imgPreview.textContent = '';
+    setImagePreviewBlob(file);
+  }
+
+  async function importYoutubeThumbnail() {
+    const videoId = extractYouTubeVideoId(el.youtubeUrl.value);
+    if (!videoId) {
+      toast('קישור YouTube לא תקין');
+      return;
+    }
+
+    draft.imagePreviewRevert = snapshotImagePreview();
+    el.youtubeImport.disabled = true;
+    toast('מייבא תמונה...');
+
+    try {
+      const { blob, quality } = await fetchYouTubeThumbnailBlob(videoId);
+      draft.pendingYtBlob = blob;
+      setImagePreviewBlob(blob);
+      el.youtubePreviewActions.hidden = false;
+      toast(`תמונה נטענה (${quality}) — לאשר?`);
+    } catch {
+      draft.pendingYtBlob = null;
+      if (draft.imagePreviewRevert) applyImagePreview(draft.imagePreviewRevert);
+      toast('לא ניתן לייבא תמונה מיוטיוב');
+    } finally {
+      el.youtubeImport.disabled = false;
+    }
+  }
+
+  function acceptYoutubeThumbnail() {
+    if (!draft.pendingYtBlob) return;
+    draft.imageBlob = draft.pendingYtBlob;
+    draft.keepImage = false;
+    hideYoutubePreviewActions();
+    toast('התמונה אושרה — לחצו «שמירה» לשמירה');
+  }
+
+  function cancelYoutubeThumbnail() {
+    if (draft.imagePreviewRevert) applyImagePreview(draft.imagePreviewRevert);
+    hideYoutubePreviewActions();
   }
   function onAudioPicked(file) {
     if (!file) return;
@@ -872,6 +1050,9 @@
     el.songAudio.addEventListener('change', (e) => onAudioPicked(e.target.files[0]));
     el.songCancel.addEventListener('click', () => (el.songModal.hidden = true));
     el.songSave.addEventListener('click', saveSongDraft);
+    el.youtubeImport.addEventListener('click', importYoutubeThumbnail);
+    el.youtubeAccept.addEventListener('click', acceptYoutubeThumbnail);
+    el.youtubeCancel.addEventListener('click', cancelYoutubeThumbnail);
 
     // Keep audio playing within the cap if volume is changed programmatically
     audio.addEventListener('volumechange', enforceVolumeCap);

@@ -129,6 +129,20 @@
         <input id="song-image" type="file" accept="image/*" hidden />
       </div>
 
+      <div class="field youtube-field">
+        <span>קישור YouTube לתמונה</span>
+        <p class="small muted">רק לייבוא תמונת אריח — לא לניגון. התמונה נשמרת במכשיר ועובדת ללא אינטרנט.</p>
+        <input id="youtube-url" type="url" class="youtube-url" inputmode="url" autocomplete="off" placeholder="https://www.youtube.com/watch?v=..." dir="ltr" />
+        <button type="button" id="youtube-import" class="btn">ייבוא תמונה מיוטיוב</button>
+        <div id="youtube-preview-actions" class="youtube-preview-actions" hidden>
+          <p class="small">התמונה מוצגת למעלה. לאשר?</p>
+          <div class="modal-actions">
+            <button type="button" id="youtube-accept" class="btn btn-primary">אישור התמונה</button>
+            <button type="button" id="youtube-cancel" class="btn">ביטול</button>
+          </div>
+        </div>
+      </div>
+
       <div class="field">
         <span>קובץ שמע</span>
         <button type="button" id="pick-audio" class="btn">בחירת קובץ שמע</button>
