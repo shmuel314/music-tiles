@@ -151,19 +151,28 @@
       const tile = document.createElement('div');
       tile.className = 'tile';
       tile.dataset.id = song.id;
-      if (song.id === state.currentSongId) tile.classList.add('playing');
+      if (song.id === state.currentSongId && state.isPlaying) tile.classList.add('playing');
 
+      const media = document.createElement('div');
+      media.className = 'tile-media';
       if (song.image) {
         const img = document.createElement('img');
         img.src = objectUrl(song.image);
         img.alt = '';
-        tile.appendChild(img);
+        media.appendChild(img);
       } else {
         const fb = document.createElement('div');
         fb.className = 'tile-fallback';
         fb.textContent = '\u266A';
-        tile.appendChild(fb);
+        media.appendChild(fb);
       }
+      tile.appendChild(media);
+
+      const title = document.createElement('div');
+      title.className = 'tile-title';
+      title.textContent = song.title || '';
+      tile.appendChild(title);
+
       tile.addEventListener('click', () => onTileTap(song.id));
       el.tiles.appendChild(tile);
     }
