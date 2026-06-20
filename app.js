@@ -31,7 +31,7 @@
     btnPlayPause: $('btn-playpause'),
     iconPlay: $('icon-play'),
     iconPause: $('icon-pause'),
-    adminTrigger: $('admin-trigger'),
+    adminEntry: $('admin-entry'),
     pinScreen: $('pin-screen'),
     pinTitle: $('pin-title'),
     pinDots: $('pin-dots'),
@@ -277,18 +277,9 @@
     }
   }
 
-  // ---- Hidden admin trigger (long-press top-left ~3s) ----
-  function bindAdminTrigger() {
-    let timer = null;
-    const start = (e) => {
-      e.preventDefault();
-      timer = setTimeout(openPinScreen, 3000);
-    };
-    const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
-    el.adminTrigger.addEventListener('pointerdown', start);
-    el.adminTrigger.addEventListener('pointerup', cancel);
-    el.adminTrigger.addEventListener('pointerleave', cancel);
-    el.adminTrigger.addEventListener('pointercancel', cancel);
+  // ---- Admin entry (visible button, PIN required) ----
+  function bindAdminEntry() {
+    el.adminEntry.addEventListener('click', openPinScreen);
   }
 
   // ---- PIN screen ----
@@ -818,7 +809,7 @@
 
   // ---- Events ----
   function bindEvents() {
-    bindAdminTrigger();
+    bindAdminEntry();
 
     el.btnPlayPause.addEventListener('click', togglePlayPause);
     el.btnNext.addEventListener('click', () => playByOffset(1));
