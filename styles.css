@@ -28,10 +28,8 @@
 
   --tile-title-height: 36px;
   --tile-radius: 22px;
-  --tile-gap: 20px;
-  --tile-pad: 20px;
-  --tile-cols: 1;
-  --tile-max: 480px;
+  --tile-gap: 16px;
+  --tile-pad: 16px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
@@ -84,26 +82,40 @@ body { touch-action: manipulation; }
   color: var(--text);
 }
 
-.tiles {
+/* Hidden admin entry: physical top-left, no visible UI */
+#admin-trigger {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 88px;
+  height: 88px;
+  z-index: 50;
+  background: transparent;
+}
+
+/* Scrollable tile area — keeps footer player from covering tiles */
+.tiles-viewport {
   flex: 1 1 auto;
   min-height: 0;
-  --tile-width: min(var(--tile-max), 100%);
-  display: grid;
-  grid-template-columns: minmax(0, var(--tile-width));
-  grid-auto-rows: auto;
-  justify-content: center;
-  align-content: start;
-  align-items: start;
-  gap: var(--tile-gap);
-  padding: var(--tile-pad);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
 
-.tile {
-  position: relative;
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--tile-gap);
+  padding: var(--tile-pad);
   width: 100%;
-  height: auto;
+  align-content: start;
+}
+
+.tile {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) var(--tile-title-height);
+  width: 100%;
+  min-width: 0;
+  aspect-ratio: 16 / 9;
   border-radius: var(--tile-radius);
   background: var(--tile-bg);
   border: 5px solid transparent;
@@ -112,11 +124,10 @@ body { touch-action: manipulation; }
   box-shadow: 0 2px 8px rgba(58, 124, 112, 0.08);
 }
 
-/* 16:9 media area — matches YouTube thumbnails */
+/* Image area fills space above the title strip inside the 16:9 tile */
 .tile-media {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
 }
 .tile-media img {
@@ -132,17 +143,17 @@ body { touch-action: manipulation; }
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: clamp(32px, 10vw, 56px);
+  font-size: clamp(28px, 8vw, 48px);
   color: var(--sage);
 }
 
-/* Fixed one-line title strip below the 16:9 image */
+/* One-line title footer inside the tile (included in 16:9 ratio) */
 .tile-title {
-  position: relative;
+  min-width: 0;
   height: var(--tile-title-height);
   line-height: var(--tile-title-height);
-  padding: 0 10px;
-  font-size: 15px;
+  padding: 0 8px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text);
   background: var(--cream);
@@ -154,6 +165,7 @@ body { touch-action: manipulation; }
 }
 
 /* Static "now playing" indicator: calm steady border + small dot. No animation. */
+.tile { position: relative; }
 .tile.playing { border-color: var(--playing); }
 .tile.playing::after {
   content: "";
@@ -177,6 +189,7 @@ body { touch-action: manipulation; }
 
 /* ---------- PLAYBACK CONTROLS (small, unobtrusive) ---------- */
 .controls {
+  flex: 0 0 auto;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -258,6 +271,57 @@ body { touch-action: manipulation; }
 }
 .admin-header h1 { font-size: 20px; margin: 0; }
 .admin-body { padding: 16px; display: flex; flex-direction: column; gap: 16px; padding-bottom: 60px; }
+
+.subview-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.subview-header h2 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--teal);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  font-size: 15px;
+}
+.toggle-row input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--teal);
+  flex-shrink: 0;
+}
+
+.list li.playlist-row {
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+.list li.playlist-row .playlist-actions {
+  width: 100%;
+  margin-top: 4px;
+}
+.playlist-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.playlist-actions .btn-compact {
+  padding: 6px 10px;
+  font-size: 13px;
+}
 
 .card {
   background: var(--card);

@@ -4,6 +4,7 @@
 
   const DEFAULT_PIN = '1234';
   const TAP_DEBOUNCE_MS = 700;
+  const ADMIN_LONG_PRESS_MS = 5000;
 
   // ---- App state ----
   const state = {
@@ -32,18 +33,24 @@
     iconPlay: $('icon-play'),
     iconPause: $('icon-pause'),
     adminEntry: $('admin-entry'),
+    childHeader: $('child-header'),
+    adminTrigger: $('admin-trigger'),
+    emptyHintAdmin: $('empty-hint-admin'),
     pinScreen: $('pin-screen'),
     pinTitle: $('pin-title'),
     pinDots: $('pin-dots'),
     pinError: $('pin-error'),
     adminScreen: $('admin-screen'),
     adminDone: $('admin-done'),
-    activePlaylistSelect: $('active-playlist-select'),
+    adminMainView: $('admin-main-view'),
+    adminPlaylistView: $('admin-playlist-view'),
+    playlistEditBack: $('playlist-edit-back'),
+    playlistEditTitle: $('playlist-edit-title'),
+    showAdminButton: $('show-admin-button'),
     volumeCap: $('volume-cap'),
     volumeCapLabel: $('volume-cap-label'),
     addPlaylist: $('add-playlist'),
     playlistList: $('playlist-list'),
-    songsTitle: $('songs-title'),
     addSong: $('add-song'),
     bulkImportSongs: $('bulk-import-songs'),
     bulkAudio: $('bulk-audio'),
@@ -125,6 +132,7 @@
     state.volumeCap = Number(await DB.getSetting('volumeCap', 0.8));
     audio.volume = state.volumeCap;
     await loadActivePlaylistView();
+    await applyAdminEntryMode();
     bindEvents();
     bindBackNavigation();
     registerServiceWorker();
@@ -160,9 +168,6 @@
   function renderTiles() {
     el.tiles.innerHTML = '';
     const count = state.songs.length;
-
-    el.tiles.classList.toggle('one', count === 1);
-    el.tiles.classList.toggle('few', count > 1 && count <= 4);
 
     if (count === 0) {
       el.emptyHint.hidden = false;
@@ -285,9 +290,53 @@
     }
   }
 
-  // ---- Admin entry (visible button, PIN required) ----
+  // ---- Admin entry (visible button or hidden long-press) ----
+  let hiddenAdminBound = false;
+
+  function bindHiddenAdminTrigger() {
+    if (hiddenAdminBound) return;
+    hiddenAdminBound = true;
+    let timer = null;
+    const start = (e) => {
+      if (el.adminTrigger.hidden) return;
+      e.preventDefault();
+      timer = setTimeout(openPinScreen, ADMIN_LONG_PRESS_MS);
+    };
+    const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+    el.adminTrigger.addEventListener('pointerdown', start);
+    el.adminTrigger.addEventListener('pointerup', cancel);
+    el.adminTrigger.addEventListener('pointerleave', cancel);
+    el.adminTrigger.addEventListener('pointercancel', cancel);
+  }
+
   function bindAdminEntry() {
     el.adminEntry.addEventListener('click', openPinScreen);
+    bindHiddenAdminTrigger();
+  }
+
+  async function applyAdminEntryMode() {
+    const show = await DB.getSetting('showAdminButton', false);
+    el.adminEntry.hidden = !show;
+    el.childHeader.hidden = !show;
+    el.adminTrigger.hidden = show;
+    if (el.showAdminButton) el.showAdminButton.checked = show;
+    updateEmptyHint();
+  }
+
+  function updateEmptyHint() {
+    if (!el.emptyHintAdmin) return;
+    const show = !el.adminEntry.hidden;
+    el.emptyHintAdmin.hidden = !show;
+    el.emptyHintAdmin.textContent = show
+      ? 'לחצו על «אזור הורים» למעלה כדי להוסיף שירים.'
+      : '';
+  }
+
+  async function saveShowAdminButton() {
+    const show = el.showAdminButton.checked;
+    await DB.setSetting('showAdminButton', show);
+    await applyAdminEntryMode();
+    toast(show ? 'כפתור הניהול יוצג במסך הראשי' : 'כפתור הניהול הוסתר');
   }
 
   // ---- PIN screen ----
@@ -372,8 +421,37 @@
   }
 
   // ---- Admin ----
+  const adminView = { editingPlaylistId: null };
+
+  function showAdminMainView() {
+    adminView.editingPlaylistId = null;
+    el.adminMainView.hidden = false;
+    el.adminPlaylistView.hidden = true;
+  }
+
+  function openPlaylistEdit(playlist) {
+    adminView.editingPlaylistId = playlist.id;
+    el.adminMainView.hidden = true;
+    el.adminPlaylistView.hidden = false;
+    el.playlistEditTitle.textContent = playlist.name;
+    renderPlaylistSongList();
+  }
+
+  async function setActivePlaylist(id) {
+    if (state.activePlaylistId === id) return;
+    await DB.setSetting('activePlaylistId', id);
+    state.activePlaylistId = id;
+    renderPlaylistList();
+    toast('הרשימה הוגדרה כפעילה');
+  }
+
+  function getAdminPlaylistId() {
+    return adminView.editingPlaylistId || state.activePlaylistId;
+  }
+
   async function openAdmin() {
     if (state.isPlaying) audio.pause();
+    showAdminMainView();
     await refreshAdmin();
     el.adminScreen.hidden = false;
   }
@@ -381,31 +459,35 @@
     state.playlists = await DB.getPlaylists();
     state.activePlaylistId = await DB.getSetting('activePlaylistId', state.playlists[0]?.id ?? null);
 
-    // Active playlist select
-    el.activePlaylistSelect.innerHTML = '';
     el.songPlaylist.innerHTML = '';
     for (const p of state.playlists) {
       const o = document.createElement('option');
-      o.value = p.id; o.textContent = p.name;
-      el.activePlaylistSelect.appendChild(o);
-      el.songPlaylist.appendChild(o.cloneNode(true));
+      o.value = p.id;
+      o.textContent = p.name;
+      el.songPlaylist.appendChild(o);
     }
-    el.activePlaylistSelect.value = state.activePlaylistId || '';
 
     // Volume
     el.volumeCap.value = Math.round(state.volumeCap * 100);
     el.volumeCapLabel.textContent = el.volumeCap.value + '%';
 
     el.youtubeApiKey.value = await DB.getSetting('youtubeApiKey', '') || '';
+    el.showAdminButton.checked = await DB.getSetting('showAdminButton', false);
 
     renderPlaylistList();
-    renderSongList();
+    if (adminView.editingPlaylistId) {
+      const p = state.playlists.find((pl) => pl.id === adminView.editingPlaylistId);
+      if (p) openPlaylistEdit(p);
+      else showAdminMainView();
+    }
   }
 
   function renderPlaylistList() {
     el.playlistList.innerHTML = '';
-    state.playlists.forEach((p, i) => {
+    state.playlists.forEach((p) => {
       const li = document.createElement('li');
+      li.className = 'playlist-row';
+
       const grow = document.createElement('div');
       grow.className = 'grow';
       const name = document.createElement('span');
@@ -421,21 +503,36 @@
       li.appendChild(grow);
 
       const actions = document.createElement('div');
-      actions.className = 'row-actions';
+      actions.className = 'playlist-actions';
+
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'btn btn-compact btn-primary';
+      editBtn.textContent = 'עריכה';
+      editBtn.addEventListener('click', () => openPlaylistEdit(p));
+      actions.appendChild(editBtn);
+
+      const activeBtn = document.createElement('button');
+      activeBtn.type = 'button';
+      activeBtn.className = 'btn btn-compact';
+      activeBtn.textContent = 'הגדרה כרשימה פעילה';
+      activeBtn.disabled = p.id === state.activePlaylistId;
+      activeBtn.addEventListener('click', () => setActivePlaylist(p.id));
+      actions.appendChild(activeBtn);
+
       actions.appendChild(iconBtn('\u270E', 'שינוי שם', () => renamePlaylist(p)));
       const delBtn = iconBtn('\u2715', 'מחיקה', () => removePlaylist(p));
       delBtn.classList.add('danger');
       delBtn.disabled = state.playlists.length <= 1;
       actions.appendChild(delBtn);
+
       li.appendChild(actions);
       el.playlistList.appendChild(li);
     });
   }
 
-  async function renderSongList() {
-    const pid = el.activePlaylistSelect.value;
-    const activeName = state.playlists.find((p) => p.id === pid)?.name || '';
-    el.songsTitle.textContent = 'שירים ב„' + activeName + '”';
+  async function renderPlaylistSongList() {
+    const pid = adminView.editingPlaylistId;
     const songs = pid ? await DB.getSongsByPlaylist(pid) : [];
     el.songList.innerHTML = '';
     songs.forEach((s, i) => {
@@ -486,7 +583,7 @@
     a.order = bo; b.order = ao;
     await DB.saveSong(a);
     await DB.saveSong(b);
-    await renderSongList();
+    await renderPlaylistSongList();
   }
 
   async function renamePlaylist(p) {
@@ -517,7 +614,7 @@
   async function removeSong(s) {
     if (!confirm(`למחוק את „${s.title || 'השיר הזה'}”?`)) return;
     await DB.deleteSong(s.id);
-    await renderSongList();
+    await renderPlaylistSongList();
   }
 
   async function saveYoutubeApiKey() {
@@ -734,7 +831,11 @@
 
     el.songModalTitle.textContent = song ? 'עריכת שיר' : 'הוספת שיר';
     el.songTitle.value = song ? (song.title || '') : '';
-    el.songPlaylist.value = song ? song.playlistId : el.activePlaylistSelect.value;
+    el.songPlaylist.value = song
+      ? song.playlistId
+      : (adminView.editingPlaylistId || state.activePlaylistId || '');
+    const playlistField = el.songPlaylist.closest('.field');
+    if (playlistField) playlistField.hidden = !!adminView.editingPlaylistId;
     el.audioName.textContent = draft.keepAudio ? 'הקובץ הקיים נשמר' : 'לא נבחר קובץ';
     el.youtubeImport.disabled = false;
     if (song && song.image) {
@@ -811,7 +912,7 @@
   }
 
   async function bulkImportSongs(files) {
-    const playlistId = el.activePlaylistSelect.value;
+    const playlistId = getAdminPlaylistId();
     if (!playlistId) {
       toast('יש לבחור רשימת השמעה');
       return;
@@ -843,7 +944,7 @@
       imported++;
     }
 
-    await renderSongList();
+    await renderPlaylistSongList();
     toast(imported === 1 ? 'שיר אחד יובא' : `${imported} שירים יובאו`);
   }
 
@@ -869,7 +970,7 @@
     await DB.saveSong(song);
     el.songModal.hidden = true;
     toast('נשמר');
-    await renderSongList();
+    await renderPlaylistSongList();
   }
 
   // ---- Backup / share ----
@@ -917,7 +1018,8 @@
         activePlaylistId: await DB.getSetting('activePlaylistId', null),
         volumeCap: state.volumeCap,
         offlineMode: await DB.getSetting('offlineMode', true),
-        youtubeApiKey: await DB.getSetting('youtubeApiKey', '')
+        youtubeApiKey: await DB.getSetting('youtubeApiKey', ''),
+        showAdminButton: await DB.getSetting('showAdminButton', false)
       },
       playlists,
       songs
@@ -992,6 +1094,7 @@
       }
       if (typeof data.settings.offlineMode === 'boolean') await DB.setSetting('offlineMode', data.settings.offlineMode);
       if (typeof data.settings.youtubeApiKey === 'string') await DB.setSetting('youtubeApiKey', data.settings.youtubeApiKey);
+      if (typeof data.settings.showAdminButton === 'boolean') await DB.setSetting('showAdminButton', data.settings.showAdminButton);
     }
   }
 
@@ -1097,8 +1200,13 @@
       return;
     }
     if (!el.adminScreen.hidden) {
+      if (!el.adminPlaylistView.hidden) {
+        showAdminMainView();
+        return;
+      }
       el.adminScreen.hidden = true;
       loadActivePlaylistView();
+      return;
     }
     // On the child/songs screen: intentionally do nothing (stay on tiles).
   }
@@ -1155,15 +1263,16 @@
 
     // Admin
     el.adminDone.addEventListener('click', async () => {
+      showAdminMainView();
       el.adminScreen.hidden = true;
       await loadActivePlaylistView();
+      await applyAdminEntryMode();
     });
-    el.activePlaylistSelect.addEventListener('change', async () => {
-      await DB.setSetting('activePlaylistId', el.activePlaylistSelect.value);
-      state.activePlaylistId = el.activePlaylistSelect.value;
+    el.playlistEditBack.addEventListener('click', () => {
+      showAdminMainView();
       renderPlaylistList();
-      await renderSongList();
     });
+    el.showAdminButton.addEventListener('change', saveShowAdminButton);
     el.volumeCap.addEventListener('input', () => {
       el.volumeCapLabel.textContent = el.volumeCap.value + '%';
     });

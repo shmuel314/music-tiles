@@ -15,13 +15,16 @@
 <body>
   <!-- CHILD SCREEN -->
   <main id="child-screen">
-    <header class="child-header">
+    <header id="child-header" class="child-header">
       <button id="admin-entry" class="admin-entry-btn" type="button">אזור הורים</button>
     </header>
-    <div id="tiles" class="tiles"></div>
+    <div id="admin-trigger" aria-hidden="true" hidden></div>
+    <div class="tiles-viewport">
+      <div id="tiles" class="tiles"></div>
+    </div>
     <div id="empty-hint" class="empty-hint" hidden>
       <p>אין שירים עדיין.</p>
-      <p class="small">לחצו על «אזור הורים» למעלה כדי להוסיף שירים.</p>
+      <p id="empty-hint-admin" class="small">לחצו על «אזור הורים» למעלה כדי להוסיף שירים.</p>
     </div>
 
     <!-- Small, unobtrusive playback bar -->
@@ -63,10 +66,14 @@
       <button id="admin-done" class="btn btn-primary">סיום</button>
     </header>
 
-    <div class="admin-body">
+    <div id="admin-main-view" class="admin-body">
       <div class="card">
-        <h3>רשימת ההשמעה הפעילה (מה שהילד רואה)</h3>
-        <select id="active-playlist-select"></select>
+        <h3>הגדרות מסך הילד</h3>
+        <label class="toggle-row">
+          <span>הצגת כפתור ניהול במסך הראשי</span>
+          <input id="show-admin-button" type="checkbox" />
+        </label>
+        <p class="small muted">כבוי: גישה נסתרת בלחיצה ארוכה (5 שניות) על הפינה השמאלית העליונה.</p>
       </div>
 
       <div class="card">
@@ -81,20 +88,8 @@
           <h3>רשימות השמעה</h3>
           <button id="add-playlist" class="btn">+ חדשה</button>
         </div>
+        <p class="small muted">לחצו «עריכה» כדי לנהל את השירים ברשימה מסוימת.</p>
         <ul id="playlist-list" class="list"></ul>
-      </div>
-
-      <div class="card">
-        <div class="card-row">
-          <h3 id="songs-title">שירים</h3>
-          <div class="card-row-actions">
-            <button id="bulk-import-songs" class="btn">+ ייבוא מרובה</button>
-            <button id="add-song" class="btn btn-primary">+ הוספת שיר</button>
-          </div>
-        </div>
-        <p class="small muted">ייבוא מרובה: בחרו מספר קבצי שמע בבת אחת. שם השיר יילקח משם הקובץ, ללא תמונה.</p>
-        <input id="bulk-audio" type="file" accept="audio/*" multiple hidden />
-        <ul id="song-list" class="list"></ul>
       </div>
 
       <div class="card">
@@ -125,6 +120,25 @@
         </div>
         <input id="import-file" type="file" accept="application/json,.json" hidden />
         <p class="small muted">ייצוא מלא כולל את קבצי השמע והתמונות (קובץ גדול, מומלץ לשיתוף). ייצוא מטא־דאטה כולל רשימות, שמות, סדר ותמונות בלבד — ללא קבצי שמע (קובץ קטן).</p>
+      </div>
+    </div>
+
+    <div id="admin-playlist-view" class="admin-body" hidden>
+      <div class="subview-header">
+        <button id="playlist-edit-back" class="btn" type="button">חזרה</button>
+        <h2 id="playlist-edit-title"></h2>
+      </div>
+      <div class="card">
+        <div class="card-row">
+          <h3>שירים ברשימה</h3>
+          <div class="card-row-actions">
+            <button id="bulk-import-songs" class="btn">+ ייבוא מרובה</button>
+            <button id="add-song" class="btn btn-primary">+ הוספת שיר</button>
+          </div>
+        </div>
+        <p class="small muted">ייבוא מרובה: בחרו מספר קבצי שמע בבת אחת. שם השיר יילקח משם הקובץ, ללא תמונה.</p>
+        <input id="bulk-audio" type="file" accept="audio/*" multiple hidden />
+        <ul id="song-list" class="list"></ul>
       </div>
     </div>
   </section>
