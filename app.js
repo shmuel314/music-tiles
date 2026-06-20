@@ -124,6 +124,7 @@
     audio.volume = state.volumeCap;
     await loadActivePlaylistView();
     bindEvents();
+    bindBackNavigation();
     registerServiceWorker();
   }
 
@@ -983,6 +984,62 @@
     } catch (err) {
       toast('הייבוא נכשל: ' + err.message);
     }
+  }
+
+  // ---- Back navigation (Android standalone / screen pinning) ----
+  function isInstalledDisplayMode() {
+    return window.matchMedia('(display-mode: standalone)').matches
+      || window.matchMedia('(display-mode: fullscreen)').matches
+      || navigator.standalone === true;
+  }
+
+  function handleBackAction() {
+    if (!el.songModal.hidden) {
+      el.songModal.hidden = true;
+      return;
+    }
+    if (!el.importModal.hidden) {
+      el.importModal.hidden = true;
+      pendingImport = null;
+      el.importFile.value = '';
+      return;
+    }
+    if (!el.pinScreen.hidden) {
+      onPinKey('cancel');
+      return;
+    }
+    if (!el.adminScreen.hidden) {
+      el.adminScreen.hidden = true;
+      loadActivePlaylistView();
+    }
+    // On the child/songs screen: intentionally do nothing (stay on tiles).
+  }
+
+  function bindBackNavigation() {
+    if (!isInstalledDisplayMode()) return;
+
+    // Prefer canonical scope URL so ./ and ./index.html do not diverge in history.
+    const canonicalUrl = new URL('./', location.href).href;
+    if (location.href !== canonicalUrl) {
+      history.replaceState(history.state, '', canonicalUrl);
+    }
+
+    if (window.navigation && typeof navigation.addEventListener === 'function') {
+      navigation.addEventListener('navigate', (event) => {
+        if (event.navigationType !== 'traverse' || !event.canIntercept) return;
+        event.intercept({ handler() { handleBackAction(); } });
+      });
+      return;
+    }
+
+    // Fallback for browsers without the Navigation API (e.g. iOS Safari).
+    const trap = { kiosk: true };
+    history.replaceState(trap, '', location.href);
+    history.pushState(trap, '', location.href);
+    window.addEventListener('popstate', () => {
+      handleBackAction();
+      history.pushState(trap, '', location.href);
+    });
   }
 
   // ---- Events ----

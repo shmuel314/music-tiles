@@ -2,7 +2,7 @@
   "name": "אריחי מוזיקה",
   "short_name": "מוזיקה",
   "description": "נגן מוזיקה פשוט, בטוח ולא מקוון עם אריחי תמונה גדולים לילדים.",
-  "start_url": "./index.html",
+  "start_url": "./",
   "scope": "./",
   "display": "fullscreen",
   "orientation": "any",
