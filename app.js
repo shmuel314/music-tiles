@@ -1463,30 +1463,50 @@
     // On the child/songs screen: intentionally do nothing (stay on tiles).
   }
 
+  // Universal "Back trap" for installed/pinned PWAs.
+  //
+  // We keep one extra "sentinel" history entry on top of the app's own entry.
+  // A Back gesture then pops the sentinel and fires a same-document `popstate`
+  // instead of leaving the document. We immediately push a fresh sentinel so
+  // there is always something to pop — the document boundary is never reached,
+  // so Back can never exit to the splash screen, a previous page, the browser
+  // start page, or close the app.
+  //
+  // This deliberately does NOT use the Navigation API's intercept(): for a
+  // boundary back traversal `canIntercept` is false, so intercept() is skipped
+  // and the browser leaves the app. The sentinel/popstate approach works
+  // consistently across Chrome (Android), WebView and iOS standalone.
+  const KIOSK_STATE = { kiosk: true };
+
+  function pushBackSentinel(url) {
+    try {
+      history.pushState(KIOSK_STATE, '', url);
+    } catch (_) {
+      // Ignore: some embedded WebViews throttle pushState; popstate refill
+      // below still keeps the trap alive on the next gesture.
+    }
+  }
+
   function bindBackNavigation() {
     if (!isInstalledDisplayMode()) return;
 
-    // Prefer canonical scope URL so ./ and ./index.html do not diverge in history.
+    // Normalize to the canonical scope URL so ./ and ./index.html cannot
+    // diverge into two distinct history entries.
     const canonicalUrl = new URL('./', location.href).href;
-    if (location.href !== canonicalUrl) {
-      history.replaceState(history.state, '', canonicalUrl);
-    }
+    try {
+      history.replaceState(KIOSK_STATE, '', canonicalUrl);
+    } catch (_) { /* no-op */ }
 
-    if (window.navigation && typeof navigation.addEventListener === 'function') {
-      navigation.addEventListener('navigate', (event) => {
-        if (event.navigationType !== 'traverse' || !event.canIntercept) return;
-        event.intercept({ handler() { handleBackAction(); } });
-      });
-      return;
-    }
+    // Seed the sentinel entry that the very first Back gesture will consume.
+    pushBackSentinel(canonicalUrl);
 
-    // Fallback for browsers without the Navigation API (e.g. iOS Safari).
-    const trap = { kiosk: true };
-    history.replaceState(trap, '', location.href);
-    history.pushState(trap, '', location.href);
     window.addEventListener('popstate', () => {
+      // Let in-app navigation react first (close a modal / leave admin).
+      // On the songs screen this intentionally does nothing.
       handleBackAction();
-      history.pushState(trap, '', location.href);
+      // Refill the sentinel synchronously so the next Back gesture also has
+      // an entry to pop and likewise stays inside the app.
+      pushBackSentinel(canonicalUrl);
     });
   }
 
