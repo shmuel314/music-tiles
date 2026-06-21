@@ -223,17 +223,59 @@
     return res.blob();
   }
 
+  // ---- Last-screen persistence + startup recovery ----
+  // The cream screen with the icon is the NATIVE PWA launch splash, drawn by
+  // Android while the document (re)loads. It has no DOM and cannot receive
+  // clicks. To guarantee the app never appears "stuck" on it after a
+  // reload/relaunch, we persist which screen was active and restore the songs
+  // screen on boot.
+  const LAST_SCREEN_KEY = 'lastScreen';
+
+  function rememberScreen(name) {
+    try { localStorage.setItem(LAST_SCREEN_KEY, name); } catch (_) {}
+  }
+  function getLastScreen() {
+    try { return localStorage.getItem(LAST_SCREEN_KEY); } catch (_) { return null; }
+  }
+
+  // Hide every overlay and present the child/songs screen.
+  function showSongsScreen() {
+    el.pinScreen.hidden = true;
+    el.adminScreen.hidden = true;
+    el.songModal.hidden = true;
+    el.copySongModal.hidden = true;
+    el.importModal.hidden = true;
+    rememberScreen('songs');
+    dbg('showSongsScreen');
+  }
+
   // ---- Boot ----
   async function init() {
-    await DB.open();
-    await ensureSeedData();
-    state.volumeCap = Number(await DB.getSetting('volumeCap', 0.8));
-    audio.volume = state.volumeCap;
-    await loadActivePlaylistView();
-    await applyChildDisplaySettings();
-    bindEvents();
-    registerServiceWorker();
-    dbg('init complete', { historyLength: history.length });
+    try {
+      await DB.open();
+      await ensureSeedData();
+      state.volumeCap = Number(await DB.getSetting('volumeCap', 0.8));
+      audio.volume = state.volumeCap;
+      await loadActivePlaylistView();
+      await applyChildDisplaySettings();
+      bindEvents();
+      registerServiceWorker();
+
+      // Startup recovery: after data is ready, if the songs screen was the last
+      // active screen (the default for the child device), restore it so we never
+      // remain on the native splash.
+      const last = getLastScreen();
+      dbg('startup lastScreen', last);
+      if (last === 'songs' || last === null) {
+        showSongsScreen();
+      }
+      dbg('init complete', { historyLength: history.length });
+    } catch (err) {
+      // Never leave the user stranded on the splash if boot throws — show the
+      // songs screen anyway (it may be empty until data recovers).
+      dbg('init ERROR', err && err.message);
+      try { showSongsScreen(); } catch (_) {}
+    }
   }
 
   async function ensureSeedData() {
@@ -283,6 +325,12 @@
     el.tiles.innerHTML = '';
     const count = state.songs.length;
     dbg('songs screen rendered', { count, historyLength: history.length });
+    // Record "songs" only when it is the visible screen (no overlay on top),
+    // so a relaunch restores tiles rather than getting stuck on the splash.
+    if (el.adminScreen.hidden && el.pinScreen.hidden && el.songModal.hidden
+        && el.copySongModal.hidden && el.importModal.hidden) {
+      rememberScreen('songs');
+    }
 
     if (count === 0) {
       el.emptyHint.hidden = false;
@@ -462,6 +510,7 @@
   const pin = { entered: '', mode: 'verify', firstEntry: '' };
 
   function openPinScreen() {
+    rememberScreen('pin');
     pin.entered = '';
     pin.mode = 'verify';
     el.pinTitle.textContent = 'הזנת קוד';
@@ -570,6 +619,7 @@
 
   async function openAdmin() {
     if (state.isPlaying) audio.pause();
+    rememberScreen('admin');
     showAdminMainView();
     await refreshAdmin();
     el.adminScreen.hidden = false;
