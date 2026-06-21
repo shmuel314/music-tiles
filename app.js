@@ -93,6 +93,42 @@
     toast: $('toast')
   };
 
+  // ---- Temporary back-navigation diagnostics ----
+  // Console logs always. To see logs ON-DEVICE (no PC needed), launch the app
+  // once with #debug in the URL (e.g. .../index.html#debug) — an on-screen log
+  // panel appears. Captured before any URL canonicalization runs.
+  const BACK_DEBUG = /(?:[?#&])debug\b/i.test(location.href);
+  let dbgPanel = null;
+  function safeJson(v) {
+    if (v === undefined) return '';
+    try { return typeof v === 'string' ? v : JSON.stringify(v); }
+    catch (_) { return String(v); }
+  }
+  function dbg(label, data) {
+    const line = '[back] ' + label + (data !== undefined ? ' ' + safeJson(data) : '');
+    try { console.log(line); } catch (_) {}
+    if (!BACK_DEBUG) return;
+    try {
+      if (!dbgPanel) {
+        dbgPanel = document.createElement('div');
+        dbgPanel.style.cssText =
+          'position:fixed;left:0;right:0;bottom:0;max-height:42%;overflow:auto;' +
+          'z-index:99999;background:rgba(0,0,0,.82);color:#1eff1e;' +
+          'font:11px/1.35 monospace;padding:6px;white-space:pre-wrap;' +
+          'direction:ltr;text-align:left;pointer-events:none;';
+        (document.body || document.documentElement).appendChild(dbgPanel);
+      }
+      dbgPanel.textContent += new Date().toISOString().slice(11, 23) + ' ' + line + '\n';
+      dbgPanel.scrollTop = dbgPanel.scrollHeight;
+    } catch (_) {}
+  }
+  dbg('script load', {
+    href: location.href,
+    readyState: document.readyState,
+    historyLength: history.length,
+    state: history.state
+  });
+
   // ---- Helpers ----
   function objectUrl(blob) {
     const url = URL.createObjectURL(blob);
@@ -196,8 +232,8 @@
     await loadActivePlaylistView();
     await applyChildDisplaySettings();
     bindEvents();
-    bindBackNavigation();
     registerServiceWorker();
+    dbg('init complete', { historyLength: history.length });
   }
 
   async function ensureSeedData() {
@@ -246,6 +282,7 @@
   function renderTiles() {
     el.tiles.innerHTML = '';
     const count = state.songs.length;
+    dbg('songs screen rendered', { count, historyLength: history.length });
 
     if (count === 0) {
       el.emptyHint.hidden = false;
@@ -1433,81 +1470,125 @@
 
   function handleBackAction() {
     if (!el.songModal.hidden) {
+      dbg('handleBackAction: close song modal');
       el.songModal.hidden = true;
       return;
     }
     if (!el.copySongModal.hidden) {
+      dbg('handleBackAction: close copy modal');
       el.copySongModal.hidden = true;
       pendingCopySong = null;
       return;
     }
     if (!el.importModal.hidden) {
+      dbg('handleBackAction: close import modal');
       el.importModal.hidden = true;
       pendingImport = null;
       el.importFile.value = '';
       return;
     }
     if (!el.pinScreen.hidden) {
+      dbg('handleBackAction: cancel pin');
       onPinKey('cancel');
       return;
     }
     if (!el.adminScreen.hidden) {
       if (!el.adminPlaylistView.hidden) {
+        dbg('handleBackAction: admin playlist -> main');
         showAdminMainView();
         return;
       }
+      dbg('handleBackAction: close admin');
       el.adminScreen.hidden = true;
       loadActivePlaylistView();
       return;
     }
     // On the child/songs screen: intentionally do nothing (stay on tiles).
+    dbg('handleBackAction: songs screen -> no-op');
   }
 
   // Universal "Back trap" for installed/pinned PWAs.
   //
-  // We keep one extra "sentinel" history entry on top of the app's own entry.
-  // A Back gesture then pops the sentinel and fires a same-document `popstate`
-  // instead of leaving the document. We immediately push a fresh sentinel so
-  // there is always something to pop — the document boundary is never reached,
-  // so Back can never exit to the splash screen, a previous page, the browser
-  // start page, or close the app.
+  // Root cause of the "Back -> white splash": the system Back was traversing out
+  // of the app's single launch history entry, which reloads the top-level
+  // document and shows the PWA launch splash (manifest background_color). There
+  // is no in-DOM splash element, so this is purely a history/document-nav issue.
   //
-  // This deliberately does NOT use the Navigation API's intercept(): for a
-  // boundary back traversal `canIntercept` is false, so intercept() is skipped
-  // and the browser leaves the app. The sentinel/popstate approach works
-  // consistently across Chrome (Android), WebView and iOS standalone.
+  // Fix: always keep a "sentinel" history entry above the app's own entry. Back
+  // then pops the sentinel and fires a same-document `popstate` (handled in-app)
+  // instead of leaving the document. We refill the sentinel synchronously on
+  // every popstate so the document boundary is never reachable.
+  //
+  // Two things the previous version got wrong (now fixed):
+  //   1. It was installed dead-last inside async init() (after ~6 awaits), so a
+  //      Back early on hit an unprotected single entry. Now installed
+  //      synchronously at script start, before any await.
+  //   2. It was gated behind isInstalledDisplayMode(); if that check was false
+  //      on the device/launcher the whole trap was skipped. The trap is no
+  //      longer gated — this is a single-screen kiosk app, so trapping Back
+  //      unconditionally is the desired behavior.
   const KIOSK_STATE = { kiosk: true };
+  let backTrapInstalled = false;
 
-  function pushBackSentinel(url) {
+  function canonicalScopeUrl() {
+    return new URL('./', location.href).href;
+  }
+
+  function pushBackSentinel() {
     try {
-      history.pushState(KIOSK_STATE, '', url);
-    } catch (_) {
-      // Ignore: some embedded WebViews throttle pushState; popstate refill
-      // below still keeps the trap alive on the next gesture.
+      history.pushState(KIOSK_STATE, '', canonicalScopeUrl());
+      dbg('pushState sentinel', { historyLength: history.length });
+    } catch (e) {
+      dbg('pushState FAILED', e && e.message);
     }
   }
 
-  function bindBackNavigation() {
-    if (!isInstalledDisplayMode()) return;
+  function installBackTrap() {
+    if (backTrapInstalled) return;
+    backTrapInstalled = true;
 
-    // Normalize to the canonical scope URL so ./ and ./index.html cannot
-    // diverge into two distinct history entries.
-    const canonicalUrl = new URL('./', location.href).href;
+    dbg('installBackTrap', {
+      installedDisplayMode: isInstalledDisplayMode(),
+      standalone: window.matchMedia('(display-mode: standalone)').matches,
+      fullscreen: window.matchMedia('(display-mode: fullscreen)').matches,
+      minimalUi: window.matchMedia('(display-mode: minimal-ui)').matches,
+      iosStandalone: navigator.standalone === true,
+      historyLength: history.length,
+      href: location.href
+    });
+
+    // Normalize to canonical scope URL so ./ and ./index.html cannot diverge.
     try {
-      history.replaceState(KIOSK_STATE, '', canonicalUrl);
-    } catch (_) { /* no-op */ }
+      history.replaceState(KIOSK_STATE, '', canonicalScopeUrl());
+      dbg('replaceState canonical', { historyLength: history.length });
+    } catch (e) {
+      dbg('replaceState FAILED', e && e.message);
+    }
 
-    // Seed the sentinel entry that the very first Back gesture will consume.
-    pushBackSentinel(canonicalUrl);
+    // Seed the sentinel that the very first Back gesture will consume.
+    pushBackSentinel();
 
-    window.addEventListener('popstate', () => {
+    window.addEventListener('popstate', (e) => {
+      dbg('popstate', { historyLength: history.length, state: e.state });
       // Let in-app navigation react first (close a modal / leave admin).
       // On the songs screen this intentionally does nothing.
       handleBackAction();
-      // Refill the sentinel synchronously so the next Back gesture also has
-      // an entry to pop and likewise stays inside the app.
-      pushBackSentinel(canonicalUrl);
+      // Refill synchronously so the next Back also stays inside the document.
+      pushBackSentinel();
     });
+
+    // bfcache restore: re-seed the sentinel (history may have been reset).
+    window.addEventListener('pageshow', (e) => {
+      dbg('pageshow', { persisted: e.persisted, historyLength: history.length });
+      if (e.persisted) pushBackSentinel();
+    });
+
+    // Diagnostics only: tells us whether Back actually unloaded the document
+    // (pagehide/beforeunload) vs. stayed in-document (popstate above).
+    document.addEventListener('visibilitychange', () =>
+      dbg('visibilitychange', { state: document.visibilityState, historyLength: history.length }));
+    window.addEventListener('pagehide', (e) => dbg('pagehide', { persisted: e.persisted }));
+    window.addEventListener('beforeunload', () => dbg('beforeunload'));
   }
 
   // ---- Events ----
@@ -1603,6 +1684,10 @@
       navigator.serviceWorker.register('./sw.js').catch(() => {});
     }
   }
+
+  // Install the Back trap FIRST, synchronously, before any async init/await,
+  // so the songs screen is protected from the very first paint.
+  installBackTrap();
 
   init();
 })();
