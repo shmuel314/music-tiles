@@ -2,6 +2,11 @@
 (() => {
   'use strict';
 
+  // ---- Build version (single source of truth) ----
+  // Bump this on every change. Keep sw.js CACHE ('music-tiles-<APP_VERSION>') in
+  // sync; the admin screen shows both so a mismatch (= stale deploy) is obvious.
+  const APP_VERSION = 'v30';
+
   const DEFAULT_PIN = '1234';
   const TAP_DEBOUNCE_MS = 700;
   const ADMIN_LONG_PRESS_MS = 5000;
@@ -58,6 +63,10 @@
     bulkAudio: $('bulk-audio'),
     songList: $('song-list'),
     changePin: $('change-pin'),
+    appVersion: $('app-version'),
+    swCacheVersion: $('sw-cache-version'),
+    copyDiagnostics: $('copy-diagnostics'),
+    exportDebug: $('export-debug'),
     youtubeApiKey: $('youtube-api-key'),
     youtubeApiSave: $('youtube-api-save'),
     exportFull: $('export-full'),
@@ -93,41 +102,268 @@
     toast: $('toast')
   };
 
-  // ---- Temporary back-navigation diagnostics ----
-  // Console logs always. To see logs ON-DEVICE (no PC needed), launch the app
-  // once with #debug in the URL (e.g. .../index.html#debug) — an on-screen log
-  // panel appears. Captured before any URL canonicalization runs.
-  const BACK_DEBUG = /(?:[?#&])debug\b/i.test(location.href);
-  let dbgPanel = null;
+  // ================= PERSISTENT back-navigation recorder =================
+  // A Back that escapes tears down the document, which would lose in-memory and
+  // console logs at the exact moment we care about. So every event is written
+  // SYNCHRONOUSLY to localStorage (survives pagehide/beforeunload/relaunch) and
+  // the full cross-launch timeline is replayed on the next load.
+  //
+  // Launch once with #debug (…/index.html#debug) to show the on-screen timeline.
+  //   ua flags:  A = transient user activation active, H = sticky has-been-active
+  //   len = history.length, buf = our buffered sentinel count.
+  // Debug is enabled by ANY of: #debug, ?debug=1/true, or localStorage debug=1.
+  // Once enabled by URL it is persisted to localStorage so it survives relaunch
+  // (the PWA start_url has no hash). Disable with ?debug=0 or #debugoff.
+  function computeDebugEnabled() {
+    try {
+      const href = location.href.toLowerCase();
+      const sp = new URLSearchParams(location.search);
+      if (sp.get('debug') === '0' || href.indexOf('debugoff') !== -1) {
+        try { localStorage.removeItem('debug'); } catch (_) {}
+        return false;
+      }
+      const on = href.indexOf('#debug') !== -1
+        || href.indexOf('debug=1') !== -1
+        || href.indexOf('debug=true') !== -1
+        || sp.get('debug') === '1'
+        || sp.get('debug') === 'true'
+        || (function () { try { return localStorage.getItem('debug') === '1'; } catch (_) { return false; } })();
+      if (on) { try { localStorage.setItem('debug', '1'); } catch (_) {} }
+      return on;
+    } catch (_) {
+      return /debug/i.test(location.href);
+    }
+  }
+  const BACK_DEBUG = computeDebugEnabled();
+  const LOG_KEY = 'backDiag.events';
+  const SEQ_KEY = 'backDiag.seq';
+  const LOG_MAX = 600;
+
+  // Back-trap state declared here so the recorder can read it without TDZ.
+  let backTrapInstalled = false;
+  let bufferedSentinels = 0;
+  let totalSentinelsSeeded = 0;
+  let backAbsorbedCount = 0;
+  let suppressHistoryLog = false;
+
+  let dbgPanel = null, dbgBody = null;
+
   function safeJson(v) {
-    if (v === undefined) return '';
+    if (v === undefined || v === '') return '';
     try { return typeof v === 'string' ? v : JSON.stringify(v); }
     catch (_) { return String(v); }
   }
-  function dbg(label, data) {
-    const line = '[back] ' + label + (data !== undefined ? ' ' + safeJson(data) : '');
-    try { console.log(line); } catch (_) {}
-    if (!BACK_DEBUG) return;
+  function activationFlags() {
+    const u = navigator.userActivation;
+    if (!u) return 'na';
+    return (u.isActive ? 'A' : '-') + (u.hasBeenActive ? 'H' : '-');
+  }
+  function readLog() {
+    try { return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch (_) { return []; }
+  }
+  function nextSeq() {
+    let n = 0;
     try {
-      if (!dbgPanel) {
-        dbgPanel = document.createElement('div');
-        dbgPanel.style.cssText =
-          'position:fixed;left:0;right:0;bottom:0;max-height:42%;overflow:auto;' +
-          'z-index:99999;background:rgba(0,0,0,.82);color:#1eff1e;' +
-          'font:11px/1.35 monospace;padding:6px;white-space:pre-wrap;' +
-          'direction:ltr;text-align:left;pointer-events:none;';
-        (document.body || document.documentElement).appendChild(dbgPanel);
+      n = (parseInt(localStorage.getItem(SEQ_KEY), 10) || 0) + 1;
+      localStorage.setItem(SEQ_KEY, String(n));
+    } catch (_) {}
+    return n;
+  }
+  function fmtRow(ev) {
+    const clock = new Date(ev.ts).toISOString().slice(11, 23);
+    return `#${ev.seq} ${clock} len=${ev.len} buf=${ev.buf} ua=${ev.ua} | ${ev.type}` +
+      (safeJson(ev.data) ? ' ' + safeJson(ev.data) : '');
+  }
+  function logEvent(type, data) {
+    const ev = {
+      seq: nextSeq(),
+      ts: Date.now(),
+      type,
+      len: (typeof history !== 'undefined' && history.length) || 0,
+      buf: bufferedSentinels,
+      ua: activationFlags(),
+      data: data === undefined ? '' : data
+    };
+    let arr = readLog();
+    arr.push(ev);
+    if (arr.length > LOG_MAX) arr = arr.slice(arr.length - LOG_MAX);
+    try { localStorage.setItem(LOG_KEY, JSON.stringify(arr)); } catch (_) {}
+    try { console.log('[back] ' + fmtRow(ev)); } catch (_) {}
+    if (BACK_DEBUG) appendPanelRow(ev);
+  }
+  // Back-compat alias used throughout the file.
+  function dbg(label, data) { logEvent(label, data); }
+
+  // Build a shareable text dump of the persisted timeline.
+  function buildDebugText() {
+    let raw = '[]';
+    try { raw = localStorage.getItem(LOG_KEY) || '[]'; } catch (_) {}
+    let body;
+    try { body = JSON.parse(raw).map(fmtRow).join('\n'); } catch (_) { body = raw; }
+    const header = [
+      'Music Tiles — back-navigation debug log',
+      'exported: ' + new Date().toISOString(),
+      'userAgent: ' + navigator.userAgent,
+      'href: ' + location.href,
+      'displayMode: ' + (window.matchMedia('(display-mode: standalone)').matches ? 'standalone'
+        : window.matchMedia('(display-mode: fullscreen)').matches ? 'fullscreen'
+          : window.matchMedia('(display-mode: minimal-ui)').matches ? 'minimal-ui' : 'browser'),
+      'history.length: ' + history.length,
+      'bufferedSentinels: ' + bufferedSentinels,
+      ''
+    ].join('\n');
+    return header + '\n' + body + '\n';
+  }
+  // Read the ACTIVE service-worker cache name (reflects the SW build that is
+  // really running on the device, independent of APP_VERSION).
+  function getActiveCacheVersion() {
+    if (!('caches' in self)) return Promise.resolve('(no Cache API)');
+    return caches.keys().then(
+      (keys) => keys.find((k) => /^music-tiles-/.test(k)) || '(none)',
+      () => '(unavailable)'
+    );
+  }
+
+  function currentDisplayMode() {
+    return window.matchMedia('(display-mode: standalone)').matches ? 'standalone'
+      : window.matchMedia('(display-mode: fullscreen)').matches ? 'fullscreen'
+        : window.matchMedia('(display-mode: minimal-ui)').matches ? 'minimal-ui' : 'browser';
+  }
+
+  function copyDiagnostics() {
+    return getActiveCacheVersion().then((cache) => {
+      const text = [
+        'app version: ' + APP_VERSION,
+        'sw cache: ' + cache,
+        'url: ' + location.href,
+        'userAgent: ' + navigator.userAgent,
+        'history.length: ' + history.length,
+        'displayMode: ' + currentDisplayMode()
+      ].join('\n');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text).then(
+          () => toast('האבחון הועתק', { success: true }),
+          () => toast('ההעתקה נכשלה')
+        );
       }
-      dbgPanel.textContent += new Date().toISOString().slice(11, 23) + ' ' + line + '\n';
+      toast('ההעתקה אינה נתמכת בדפדפן זה');
+    });
+  }
+
+  function exportDebugLog() {
+    const text = buildDebugText();
+    try {
+      const blob = new Blob([text], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'music-tiles-debug-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.txt';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 8000);
+    } catch (_) {}
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(
+        () => toast('יומן הניפוי הועתק והורד', { success: true }),
+        () => toast('יומן הניפוי הורד')
+      );
+    } else {
+      toast('יומן הניפוי הורד');
+    }
+  }
+
+  function appendPanelRow(ev) {
+    try {
+      if (!dbgPanel) renderPanel();
+      const div = document.createElement('div');
+      div.textContent = fmtRow(ev);
+      if (/pagehide|beforeunload/.test(ev.type)) div.style.color = '#ff6b6b';
+      else if (/popstate/.test(ev.type)) div.style.color = '#ffd93d';
+      else if (/LOAD|pageshow|user-gesture/.test(ev.type)) div.style.color = '#6bcbff';
+      dbgBody.appendChild(div);
       dbgPanel.scrollTop = dbgPanel.scrollHeight;
     } catch (_) {}
   }
-  dbg('script load', {
+  function renderPanel() {
+    dbgPanel = document.createElement('div');
+    dbgPanel.style.cssText =
+      'position:fixed;left:0;right:0;bottom:0;height:48%;overflow:auto;z-index:99999;' +
+      'background:rgba(0,0,0,.86);color:#1eff1e;font:10px/1.3 monospace;padding:0 4px 6px;' +
+      'white-space:pre-wrap;direction:ltr;text-align:left;';
+    const bar = document.createElement('div');
+    bar.style.cssText = 'position:sticky;top:0;background:#111;color:#fff;padding:3px 4px;display:flex;gap:8px;align-items:center;';
+    const title = document.createElement('span');
+    title.textContent = 'BACK DIAG (persisted timeline)';
+    const clear = document.createElement('button');
+    clear.textContent = 'CLEAR';
+    clear.style.cssText = 'font:10px monospace;pointer-events:auto;';
+    clear.addEventListener('click', (e) => {
+      e.stopPropagation();
+      try { localStorage.removeItem(LOG_KEY); localStorage.removeItem(SEQ_KEY); } catch (_) {}
+      if (dbgBody) dbgBody.textContent = '';
+    });
+    bar.appendChild(title);
+    bar.appendChild(clear);
+    dbgPanel.appendChild(bar);
+    dbgBody = document.createElement('div');
+    dbgPanel.appendChild(dbgBody);
+    (document.body || document.documentElement).appendChild(dbgPanel);
+    for (const ev of readLog()) appendPanelRow(ev); // replay previous sessions
+  }
+
+  // Wrap history methods to record EVERY mutation app-wide, with the
+  // user-activation state AT THE TIME OF THE CALL (gesture vs non-gesture).
+  (function instrumentHistory() {
+    const _push = history.pushState.bind(history);
+    const _replace = history.replaceState.bind(history);
+    history.pushState = function (s, t, u) {
+      const lenBefore = history.length, act = activationFlags();
+      const r = _push(s, t, u);
+      if (!suppressHistoryLog) {
+        logEvent('pushState', { ua_at_call: act, lenBefore, lenAfter: history.length, url: u || '(current)' });
+      }
+      return r;
+    };
+    history.replaceState = function (s, t, u) {
+      const lenBefore = history.length, act = activationFlags();
+      const r = _replace(s, t, u);
+      logEvent('replaceState', { ua_at_call: act, lenBefore, lenAfter: history.length, url: u || '(current)' });
+      return r;
+    };
+  })();
+
+  // Global lifecycle instrumentation — active from the first line, regardless of
+  // the trap. These only RECORD; trap logic lives in installBackTrap().
+  (function instrumentEvents() {
+    window.addEventListener('popstate', (e) => logEvent('popstate', { state: e.state }), true);
+    window.addEventListener('hashchange', () => logEvent('hashchange'), true);
+    window.addEventListener('pageshow', (e) => logEvent('pageshow', { persisted: e.persisted }), true);
+    window.addEventListener('pagehide', (e) => logEvent('pagehide', { persisted: e.persisted }), true);
+    window.addEventListener('beforeunload', () => logEvent('beforeunload'), true);
+    document.addEventListener('visibilitychange', () => logEvent('visibilitychange', { vis: document.visibilityState }), true);
+    ['pointerdown', 'touchstart', 'mousedown', 'keydown'].forEach((ty) =>
+      window.addEventListener(ty, () => logEvent('user-gesture', { kind: ty }), true));
+  })();
+
+  // Show the panel IMMEDIATELY at startup when debug is enabled (don't wait for
+  // the first lazily-logged event), and stamp the version into the page title.
+  if (BACK_DEBUG) {
+    try { renderPanel(); } catch (_) {}
+    try {
+      if (document.title.indexOf('[' + APP_VERSION + ']') === -1) {
+        document.title = document.title + ' [' + APP_VERSION + ']';
+      }
+    } catch (_) {}
+  }
+
+  logEvent('=== LOAD ===', {
+    version: APP_VERSION,
     href: location.href,
     readyState: document.readyState,
-    historyLength: history.length,
-    state: history.state
+    displayMode: currentDisplayMode()
   });
+  getActiveCacheVersion().then((cache) => logEvent('sw cache', { cache }));
 
   // ---- Helpers ----
   function objectUrl(blob) {
@@ -624,7 +860,16 @@
     await refreshAdmin();
     el.adminScreen.hidden = false;
   }
+  function updateVersionInfo() {
+    if (el.appVersion) el.appVersion.textContent = APP_VERSION;
+    if (el.swCacheVersion) {
+      el.swCacheVersion.textContent = '…';
+      getActiveCacheVersion().then((c) => { el.swCacheVersion.textContent = c; });
+    }
+  }
+
   async function refreshAdmin() {
+    updateVersionInfo();
     state.playlists = await DB.getPlaylists();
     state.activePlaylistId = await DB.getSetting('activePlaylistId', state.playlists[0]?.id ?? null);
 
@@ -1559,44 +1804,69 @@
 
   // Universal "Back trap" for installed/pinned PWAs.
   //
-  // ROOT CAUSE of "Back -> native splash, stuck": Chrome's *History Manipulation
-  // Intervention*. Chrome SKIPS history entries that were created without a user
-  // gesture. Our sentinel was pushed at script load (no gesture), so Back jumped
-  // over it (and the gesture-less launch entry), left the document, reloaded
-  // start_url -> the native PWA splash. popstate never fired, so our re-push
-  // never ran. (Ref: Chromium blink-dev "History Manipulation Intervention".)
+  // THE RULE (from Chromium's History Manipulation Intervention docs):
+  //   * With a user activation, a document may create MANY unskippable
+  //     same-document history entries — until a cross-document nav or a
+  //     back/forward occurs.
+  //   * But if a document adds ANY history entry WITHOUT a (currently honored)
+  //     user activation, the skippable flag is set to `true` for ALL of that
+  //     document's same-document entries at once. After a back/forward, prior
+  //     activations are no longer honored for creating new entries.
   //
-  // FIX, two parts:
-  //   1. Same-document sentinel: push with an EMPTY url so the entry keeps the
-  //      current document URL (no scope/start_url change). Back then traverses
-  //      same-document and fires popstate instead of reloading.
-  //   2. Gesture-bless: re-create the sentinel during a real user gesture
-  //      (pointer/touch/key). A gesture-backed entry is NOT skippable, so Back
-  //      reliably fires popstate. We re-arm this after every Back.
+  // WHY the previous attempts failed:
+  //   - A single gesture-less sentinel at load was skipped -> Back left the doc.
+  //   - The 100-entry buffer was actually fine, BUT we also did pushState inside
+  //     the popstate handler. After Back #1 the gesture is no longer honored, so
+  //     that one gesture-less pushState flipped the ENTIRE buffer to skippable —
+  //     Back #2 then found everything skippable and exited. (Back #1 stayed,
+  //     Back #2 escaped — exactly the reported symptom.)
   //
-  // NOTE: A Back pressed before ANY in-document interaction can still be skipped
-  // by Chrome (platform limit) — but a kiosk child taps a tile within seconds,
-  // which blesses the sentinel; from then on Back is fully trapped.
+  // THE FIX:
+  //   - Seed a deep buffer of unskippable entries INSIDE a real user gesture
+  //     (the child's first tile tap). These survive repeated Backs.
+  //   - NEVER pushState again without a fresh gesture (no popstate replacement),
+  //     so the buffer is never poisoned. Each Back consumes one entry and fires
+  //     popstate; the rest stay unskippable.
+  //   - Re-seed/top-up only inside subsequent user-gesture handlers.
+  //   - Sentinels use pushState(state, '') (empty url) -> same document, no
+  //     scope/start_url drift.
+  //
+  // Belt-and-suspenders: the service worker serves the shell cache-first and
+  // init() restores the songs screen, so even if the buffer is ever exhausted
+  // (after a very long Back streak) a relaunch recovers instantly, never stuck.
   const KIOSK_STATE = { kiosk: true };
-  let backTrapInstalled = false;
-  let sentinelNeedsGesture = false;
+  const SENTINEL_BUFFER_SIZE = 100;
 
-  function pushBackSentinel() {
-    try {
-      // Empty url -> keep current document URL (same-document entry).
-      history.pushState(KIOSK_STATE, '');
-      dbg('pushState sentinel', { historyLength: history.length });
-    } catch (e) {
-      dbg('pushState FAILED', e && e.message);
+  // Top the buffer up to full. MUST run inside a user-gesture call stack so the
+  // pushed entries are unskippable. Pushing here is the ONLY place we pushState.
+  // The individual pushes are summarized into a single log row (with the actual
+  // history growth, which proves how many entries Chrome accepted).
+  function seedSentinelBuffer() {
+    if (bufferedSentinels >= SENTINEL_BUFFER_SIZE) return;
+    const before = history.length;
+    const act = activationFlags();
+    let pushed = 0;
+    suppressHistoryLog = true;
+    while (bufferedSentinels < SENTINEL_BUFFER_SIZE) {
+      try {
+        history.pushState(KIOSK_STATE, ''); // empty url -> same-document entry
+      } catch (e) {
+        suppressHistoryLog = false;
+        dbg('seed pushState FAILED', e && e.message);
+        break;
+      }
+      bufferedSentinels++;
+      totalSentinelsSeeded++;
+      pushed++;
     }
-  }
-
-  // Re-create the top sentinel inside a user gesture so Chrome cannot skip it.
-  function blessSentinelOnGesture() {
-    if (!sentinelNeedsGesture) return;
-    sentinelNeedsGesture = false;
-    dbg('bless sentinel (user gesture)');
-    pushBackSentinel();
+    suppressHistoryLog = false;
+    dbg('seed-burst pushState', {
+      ua_at_call: act,
+      pushed,
+      historyGrew: history.length - before,
+      buf: bufferedSentinels,
+      totalSeeded: totalSentinelsSeeded
+    });
   }
 
   function installBackTrap() {
@@ -1604,56 +1874,31 @@
     backTrapInstalled = true;
 
     dbg('installBackTrap', {
-      installedDisplayMode: isInstalledDisplayMode(),
-      standalone: window.matchMedia('(display-mode: standalone)').matches,
-      fullscreen: window.matchMedia('(display-mode: fullscreen)').matches,
-      minimalUi: window.matchMedia('(display-mode: minimal-ui)').matches,
-      iosStandalone: navigator.standalone === true,
-      historyLength: history.length,
-      href: location.href
+      displayMode: isInstalledDisplayMode() ? 'installed' : 'browser',
+      bufferSize: SENTINEL_BUFFER_SIZE
     });
 
-    // Keep the current entry (no URL change — avoids any scope/start_url drift).
-    try {
-      history.replaceState(KIOSK_STATE, '');
-      dbg('replaceState current', { historyLength: history.length });
-    } catch (e) {
-      dbg('replaceState FAILED', e && e.message);
-    }
+    // Keep the current entry (replaceState does NOT add an entry). Logged by the
+    // history wrapper automatically.
+    try { history.replaceState(KIOSK_STATE, ''); } catch (e) { dbg('replaceState FAILED', e && e.message); }
 
-    // Seed an initial sentinel, then mark it as needing a user gesture to be
-    // non-skippable by Chrome's intervention.
-    pushBackSentinel();
-    sentinelNeedsGesture = true;
-
-    window.addEventListener('popstate', (e) => {
-      dbg('popstate', { historyLength: history.length, state: e.state });
-      // Let in-app navigation react first (close a modal / leave admin).
-      // On the songs screen this intentionally does nothing.
+    window.addEventListener('popstate', () => {
+      backAbsorbedCount++;
+      if (bufferedSentinels > 0) bufferedSentinels--;
+      dbg('back-absorbed (trap)', { backAbsorbedCount, buf: bufferedSentinels });
+      // Useful in-app back (close modal / leave admin). No-op on songs.
+      // IMPORTANT: do NOT pushState here — a gesture-less push would mark the
+      // whole sentinel buffer skippable and let the next Back escape.
       handleBackAction();
-      // Refill immediately so this Back stays inside the document...
-      pushBackSentinel();
-      // ...and re-arm gesture-bless so the NEXT Back is also non-skippable.
-      sentinelNeedsGesture = true;
     });
 
-    // Bless the sentinel on the first user interaction (and after each Back).
+    // Seed / top up the buffer on every real user gesture.
     ['pointerdown', 'touchstart', 'mousedown', 'keydown'].forEach((type) => {
-      window.addEventListener(type, blessSentinelOnGesture, { capture: true, passive: true });
+      window.addEventListener(type, seedSentinelBuffer, { capture: true, passive: true });
     });
 
-    // bfcache restore: re-seed the sentinel (history may have been reset).
-    window.addEventListener('pageshow', (e) => {
-      dbg('pageshow', { persisted: e.persisted, historyLength: history.length });
-      if (e.persisted) { pushBackSentinel(); sentinelNeedsGesture = true; }
-    });
-
-    // Diagnostics only: tells us whether Back actually unloaded the document
-    // (pagehide/beforeunload) vs. stayed in-document (popstate above).
-    document.addEventListener('visibilitychange', () =>
-      dbg('visibilitychange', { state: document.visibilityState, historyLength: history.length }));
-    window.addEventListener('pagehide', (e) => dbg('pagehide', { persisted: e.persisted }));
-    window.addEventListener('beforeunload', () => dbg('beforeunload'));
+    // bfcache restore: history may have been reset — require a fresh re-seed.
+    window.addEventListener('pageshow', (e) => { if (e.persisted) bufferedSentinels = 0; });
   }
 
   // ---- Events ----
@@ -1706,6 +1951,8 @@
       e.target.value = '';
     });
     el.changePin.addEventListener('click', openChangePin);
+    if (el.copyDiagnostics) el.copyDiagnostics.addEventListener('click', copyDiagnostics);
+    if (el.exportDebug) el.exportDebug.addEventListener('click', exportDebugLog);
     el.youtubeApiSave.addEventListener('click', saveYoutubeApiKey);
     el.exportFull.addEventListener('click', () => exportData(true, el.exportFull));
     el.exportMeta.addEventListener('click', () => exportData(false, el.exportMeta));

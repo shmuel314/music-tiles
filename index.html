@@ -65,6 +65,15 @@
 
     <div id="admin-main-view" class="admin-body">
       <div class="card">
+        <h3>מידע גרסה</h3>
+        <p class="small muted">גרסת אפליקציה: <span id="app-version">—</span></p>
+        <p class="small muted">Service Worker Cache: <span id="sw-cache-version">—</span></p>
+        <div class="btn-group">
+          <button id="copy-diagnostics" class="btn" type="button">העתקת אבחון</button>
+        </div>
+      </div>
+
+      <div class="card">
         <h3>הגדרות מסך הילד</h3>
         <label class="toggle-row">
           <span>הצגת כפתור ניהול במסך הראשי</span>
@@ -109,6 +118,14 @@
         <h3>אבטחה</h3>
         <div class="btn-group">
           <button id="change-pin" class="btn">שינוי קוד</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>ניפוי באגים (זמני)</h3>
+        <p class="small muted">ייצוא יומן ניווט «חזרה» (Back) לקובץ טקסט לשיתוף, וגם העתקה ללוח.</p>
+        <div class="btn-group">
+          <button id="export-debug" class="btn" type="button">ייצוא יומן ניפוי</button>
         </div>
       </div>
 
