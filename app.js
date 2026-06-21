@@ -1559,38 +1559,44 @@
 
   // Universal "Back trap" for installed/pinned PWAs.
   //
-  // Root cause of the "Back -> white splash": the system Back was traversing out
-  // of the app's single launch history entry, which reloads the top-level
-  // document and shows the PWA launch splash (manifest background_color). There
-  // is no in-DOM splash element, so this is purely a history/document-nav issue.
+  // ROOT CAUSE of "Back -> native splash, stuck": Chrome's *History Manipulation
+  // Intervention*. Chrome SKIPS history entries that were created without a user
+  // gesture. Our sentinel was pushed at script load (no gesture), so Back jumped
+  // over it (and the gesture-less launch entry), left the document, reloaded
+  // start_url -> the native PWA splash. popstate never fired, so our re-push
+  // never ran. (Ref: Chromium blink-dev "History Manipulation Intervention".)
   //
-  // Fix: always keep a "sentinel" history entry above the app's own entry. Back
-  // then pops the sentinel and fires a same-document `popstate` (handled in-app)
-  // instead of leaving the document. We refill the sentinel synchronously on
-  // every popstate so the document boundary is never reachable.
+  // FIX, two parts:
+  //   1. Same-document sentinel: push with an EMPTY url so the entry keeps the
+  //      current document URL (no scope/start_url change). Back then traverses
+  //      same-document and fires popstate instead of reloading.
+  //   2. Gesture-bless: re-create the sentinel during a real user gesture
+  //      (pointer/touch/key). A gesture-backed entry is NOT skippable, so Back
+  //      reliably fires popstate. We re-arm this after every Back.
   //
-  // Two things the previous version got wrong (now fixed):
-  //   1. It was installed dead-last inside async init() (after ~6 awaits), so a
-  //      Back early on hit an unprotected single entry. Now installed
-  //      synchronously at script start, before any await.
-  //   2. It was gated behind isInstalledDisplayMode(); if that check was false
-  //      on the device/launcher the whole trap was skipped. The trap is no
-  //      longer gated — this is a single-screen kiosk app, so trapping Back
-  //      unconditionally is the desired behavior.
+  // NOTE: A Back pressed before ANY in-document interaction can still be skipped
+  // by Chrome (platform limit) — but a kiosk child taps a tile within seconds,
+  // which blesses the sentinel; from then on Back is fully trapped.
   const KIOSK_STATE = { kiosk: true };
   let backTrapInstalled = false;
-
-  function canonicalScopeUrl() {
-    return new URL('./', location.href).href;
-  }
+  let sentinelNeedsGesture = false;
 
   function pushBackSentinel() {
     try {
-      history.pushState(KIOSK_STATE, '', canonicalScopeUrl());
+      // Empty url -> keep current document URL (same-document entry).
+      history.pushState(KIOSK_STATE, '');
       dbg('pushState sentinel', { historyLength: history.length });
     } catch (e) {
       dbg('pushState FAILED', e && e.message);
     }
+  }
+
+  // Re-create the top sentinel inside a user gesture so Chrome cannot skip it.
+  function blessSentinelOnGesture() {
+    if (!sentinelNeedsGesture) return;
+    sentinelNeedsGesture = false;
+    dbg('bless sentinel (user gesture)');
+    pushBackSentinel();
   }
 
   function installBackTrap() {
@@ -1607,30 +1613,39 @@
       href: location.href
     });
 
-    // Normalize to canonical scope URL so ./ and ./index.html cannot diverge.
+    // Keep the current entry (no URL change — avoids any scope/start_url drift).
     try {
-      history.replaceState(KIOSK_STATE, '', canonicalScopeUrl());
-      dbg('replaceState canonical', { historyLength: history.length });
+      history.replaceState(KIOSK_STATE, '');
+      dbg('replaceState current', { historyLength: history.length });
     } catch (e) {
       dbg('replaceState FAILED', e && e.message);
     }
 
-    // Seed the sentinel that the very first Back gesture will consume.
+    // Seed an initial sentinel, then mark it as needing a user gesture to be
+    // non-skippable by Chrome's intervention.
     pushBackSentinel();
+    sentinelNeedsGesture = true;
 
     window.addEventListener('popstate', (e) => {
       dbg('popstate', { historyLength: history.length, state: e.state });
       // Let in-app navigation react first (close a modal / leave admin).
       // On the songs screen this intentionally does nothing.
       handleBackAction();
-      // Refill synchronously so the next Back also stays inside the document.
+      // Refill immediately so this Back stays inside the document...
       pushBackSentinel();
+      // ...and re-arm gesture-bless so the NEXT Back is also non-skippable.
+      sentinelNeedsGesture = true;
+    });
+
+    // Bless the sentinel on the first user interaction (and after each Back).
+    ['pointerdown', 'touchstart', 'mousedown', 'keydown'].forEach((type) => {
+      window.addEventListener(type, blessSentinelOnGesture, { capture: true, passive: true });
     });
 
     // bfcache restore: re-seed the sentinel (history may have been reset).
     window.addEventListener('pageshow', (e) => {
       dbg('pageshow', { persisted: e.persisted, historyLength: history.length });
-      if (e.persisted) pushBackSentinel();
+      if (e.persisted) { pushBackSentinel(); sentinelNeedsGesture = true; }
     });
 
     // Diagnostics only: tells us whether Back actually unloaded the document
