@@ -5,7 +5,7 @@
   // ---- Build version (single source of truth) ----
   // Bump this on every change. Keep sw.js CACHE ('music-tiles-<APP_VERSION>') in
   // sync; the admin screen shows both so a mismatch (= stale deploy) is obvious.
-  const APP_VERSION = 'v30';
+  const APP_VERSION = 'v32';
 
   const DEFAULT_PIN = '1234';
   const TAP_DEBOUNCE_MS = 700;
@@ -66,6 +66,8 @@
     appVersion: $('app-version'),
     swCacheVersion: $('sw-cache-version'),
     copyDiagnostics: $('copy-diagnostics'),
+    backDiagBody: $('back-diag-body'),
+    backDiagRefresh: $('back-diag-refresh'),
     exportDebug: $('export-debug'),
     youtubeApiKey: $('youtube-api-key'),
     youtubeApiSave: $('youtube-api-save'),
@@ -145,6 +147,9 @@
   let totalSentinelsSeeded = 0;
   let backAbsorbedCount = 0;
   let suppressHistoryLog = false;
+  let lastBurstAccepted = 0;
+  let lastBurstAttempts = 0;
+  let lastBurstThrottled = false;
 
   let dbgPanel = null, dbgBody = null;
 
@@ -868,8 +873,28 @@
     }
   }
 
+  function updateBackDiag() {
+    if (!el.backDiagBody) return;
+    el.backDiagBody.textContent = [
+      'Accepted last burst: ' + lastBurstAccepted,
+      'Attempted last burst: ' + lastBurstAttempts,
+      'Throttled: ' + (lastBurstThrottled ? 'yes' : 'no'),
+      'Current buffer: ' + bufferedSentinels,
+      'Total accepted: ' + totalSentinelsSeeded,
+      'Back absorbed: ' + backAbsorbedCount,
+      'History length: ' + history.length,
+      'App version: ' + APP_VERSION,
+      'SW cache: …'
+    ].join('\n');
+    getActiveCacheVersion().then((c) => {
+      if (!el.backDiagBody) return;
+      el.backDiagBody.textContent = el.backDiagBody.textContent.replace(/SW cache: .*/, 'SW cache: ' + c);
+    });
+  }
+
   async function refreshAdmin() {
     updateVersionInfo();
+    updateBackDiag();
     state.playlists = await DB.getPlaylists();
     state.activePlaylistId = await DB.getSetting('activePlaylistId', state.playlists[0]?.id ?? null);
 
@@ -1834,39 +1859,74 @@
   // Belt-and-suspenders: the service worker serves the shell cache-first and
   // init() restores the songs screen, so even if the buffer is ever exhausted
   // (after a very long Back streak) a relaunch recovers instantly, never stuck.
-  const KIOSK_STATE = { kiosk: true };
-  const SENTINEL_BUFFER_SIZE = 100;
+  // OBSERVED PLATFORM LIMIT (Chrome rate-limiter): pushState is rate-limited and
+  // SILENTLY no-ops when called in rapid succession (spec allows dropping calls
+  // "invoked in rapid succession"; Chrome returns instead of throwing). So a
+  // tight 100-push loop in ONE gesture only yields a handful of real entries —
+  // the rest are ignored with no error. The previous code counted ATTEMPTS, not
+  // accepted entries, so bufferedSentinels read ~100 while only ~5-10 existed →
+  // protection ended after ~5-10 Backs.
+  //
+  // DESIGN-AROUND:
+  //   1. Detect REAL acceptance the documented way: tag each push with a unique
+  //      id in state and verify history.state.s afterwards. Stop the burst as
+  //      soon as a push is dropped (throttle hit). bufferedSentinels is now the
+  //      true count.
+  //   2. Top up on EVERY user gesture (not just the first). Normal play keeps
+  //      the buffer deep across many Backs.
+  //   3. Because one gesture cannot create 50 entries on this device, the hard
+  //      guarantee for "survive a long Back streak with no further taps" is the
+  //      RECOVERY path: cache-first SW + init() restoring the songs screen, so an
+  //      eventual escape relaunches straight back to songs instead of stranding
+  //      on the splash.
+  const SENTINEL_BUFFER_SIZE = 300;   // target depth; per-gesture acceptance is throttle-limited
+  let seedSeq = 0;
 
-  // Top the buffer up to full. MUST run inside a user-gesture call stack so the
-  // pushed entries are unskippable. Pushing here is the ONLY place we pushState.
-  // The individual pushes are summarized into a single log row (with the actual
-  // history growth, which proves how many entries Chrome accepted).
+  // Push sentinels until the target depth is reached OR Chrome starts dropping
+  // them (throttle). MUST run inside a user-gesture call stack (unskippable).
   function seedSentinelBuffer() {
     if (bufferedSentinels >= SENTINEL_BUFFER_SIZE) return;
-    const before = history.length;
+    const startLen = history.length;
     const act = activationFlags();
-    let pushed = 0;
+    let accepted = 0, attempts = 0, throttled = false;
     suppressHistoryLog = true;
-    while (bufferedSentinels < SENTINEL_BUFFER_SIZE) {
+    while (bufferedSentinels < SENTINEL_BUFFER_SIZE && attempts < SENTINEL_BUFFER_SIZE * 2) {
+      const marker = ++seedSeq;
+      attempts++;
       try {
-        history.pushState(KIOSK_STATE, ''); // empty url -> same-document entry
+        history.pushState({ kiosk: true, s: marker }, '');
       } catch (e) {
+        throttled = true;
         suppressHistoryLog = false;
-        dbg('seed pushState FAILED', e && e.message);
+        dbg('seed pushState THREW', e && e.message);
+        suppressHistoryLog = true;
         break;
       }
-      bufferedSentinels++;
-      totalSentinelsSeeded++;
-      pushed++;
+      // Documented detection of the silent rate-limit no-op: check history.state.
+      if (history.state && history.state.s === marker) {
+        bufferedSentinels++;
+        totalSentinelsSeeded++;
+        accepted++;
+      } else {
+        throttled = true; // push was dropped — stop hammering the limiter
+        break;
+      }
     }
     suppressHistoryLog = false;
-    dbg('seed-burst pushState', {
+    lastBurstAccepted = accepted;
+    lastBurstAttempts = attempts;
+    lastBurstThrottled = throttled;
+    dbg('seed-burst', {
       ua_at_call: act,
-      pushed,
-      historyGrew: history.length - before,
+      accepted,
+      attempts,
+      throttled,
+      historyGrew: history.length - startLen,
       buf: bufferedSentinels,
+      len: history.length,
       totalSeeded: totalSentinelsSeeded
     });
+    if (el && el.backDiagBody && !el.adminScreen.hidden) updateBackDiag();
   }
 
   function installBackTrap() {
@@ -1875,25 +1935,31 @@
 
     dbg('installBackTrap', {
       displayMode: isInstalledDisplayMode() ? 'installed' : 'browser',
-      bufferSize: SENTINEL_BUFFER_SIZE
+      bufferTarget: SENTINEL_BUFFER_SIZE
     });
 
     // Keep the current entry (replaceState does NOT add an entry). Logged by the
-    // history wrapper automatically.
-    try { history.replaceState(KIOSK_STATE, ''); } catch (e) { dbg('replaceState FAILED', e && e.message); }
+    // history wrapper automatically. Base entry has state {kiosk:true} (no .s).
+    try { history.replaceState({ kiosk: true }, ''); } catch (e) { dbg('replaceState FAILED', e && e.message); }
 
-    window.addEventListener('popstate', () => {
+    window.addEventListener('popstate', (e) => {
       backAbsorbedCount++;
+      const atBase = !(e.state && e.state.s);   // reached our base entry?
       if (bufferedSentinels > 0) bufferedSentinels--;
-      dbg('back-absorbed (trap)', { backAbsorbedCount, buf: bufferedSentinels });
+      if (atBase) {
+        bufferedSentinels = 0;
+        dbg('back-absorbed AT BASE — buffer empty, next Back may exit (tap to refill)', { backAbsorbedCount });
+      } else {
+        dbg('back-absorbed (trap)', { backAbsorbedCount, buf: bufferedSentinels, depth: e.state.s });
+      }
       // Useful in-app back (close modal / leave admin). No-op on songs.
       // IMPORTANT: do NOT pushState here — a gesture-less push would mark the
       // whole sentinel buffer skippable and let the next Back escape.
       handleBackAction();
     });
 
-    // Seed / top up the buffer on every real user gesture.
-    ['pointerdown', 'touchstart', 'mousedown', 'keydown'].forEach((type) => {
+    // Seed / top up the buffer on EVERY real user gesture.
+    ['pointerdown', 'touchstart', 'mousedown', 'keydown', 'click'].forEach((type) => {
       window.addEventListener(type, seedSentinelBuffer, { capture: true, passive: true });
     });
 
@@ -1952,6 +2018,7 @@
     });
     el.changePin.addEventListener('click', openChangePin);
     if (el.copyDiagnostics) el.copyDiagnostics.addEventListener('click', copyDiagnostics);
+    if (el.backDiagRefresh) el.backDiagRefresh.addEventListener('click', updateBackDiag);
     if (el.exportDebug) el.exportDebug.addEventListener('click', exportDebugLog);
     el.youtubeApiSave.addEventListener('click', saveYoutubeApiKey);
     el.exportFull.addEventListener('click', () => exportData(true, el.exportFull));
